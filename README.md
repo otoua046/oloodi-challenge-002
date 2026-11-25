@@ -2,6 +2,12 @@
 
 Build a staffing assistant that works with the dashboard in this repository. The starter includes the dashboard, a seeded shift, and an API for reading the roster and inviting a worker. Follow the Challenge 002 brief for the full assignment.
 
+A hosted preview runs at https://oloodi-challenge-002.fly.dev. It is password protected: email oussamatouahri430@gmail.com for access. Build and run your work locally.
+
+![Manager view: the shift, its staffing counts and the worker roster](docs/screenshots/manager.png)
+
+![Worker view on a phone: Alex Chen can accept or decline the invitation](docs/screenshots/worker.png)
+
 ## Run the demo
 
 From the repository root, run:
@@ -10,7 +16,7 @@ From the repository root, run:
 docker compose up --build
 ```
 
-Open **http://127.0.0.1:3000**. The first start seeds the database. Later starts reuse it. To restore the seed while the app is running, use `docker compose exec staffing npm run reset`. To stop, use `docker compose down`.
+Open **http://127.0.0.1:3000**. The first start seeds the database. Later starts reuse it. To restore the seed while the app is running, choose **Reset demo** above the roster as the Manager, or run `docker compose exec staffing npm run reset`. To stop, use `docker compose down`.
 
 For local development, use **Node 24.12 or later** and npm:
 
@@ -29,7 +35,7 @@ npm start
 fly secrets set PREVIEW_PASSWORD='choose-a-long-random-password'
 ```
 
-With `PREVIEW_PASSWORD` set, the server asks every visitor for that password and accepts any user name. API callers pass it too, for example `curl -u preview:PASSWORD "$SHIFT"`. Local runs leave it unset and stay open. Keep one Machine with `fly scale count 1`, because each Machine has its own database. The preview returns to the seeded shift whenever its Machine restarts.
+With `PREVIEW_PASSWORD` set, the server asks every visitor for that password and accepts any user name. To reset the preview from your machine, pass the password to the reset command: `APP_URL=https://oloodi-challenge-002.fly.dev PREVIEW_PASSWORD='…' npm run reset`. API callers pass it too, for example `curl -u preview:PASSWORD "$SHIFT"`. Local runs leave it unset and stay open. Keep one Machine with `fly scale count 1`, because each Machine has its own database. The preview returns to the seeded shift whenever its Machine restarts.
 
 ## The shift
 
@@ -56,7 +62,7 @@ The demo keeps the role and worker selection per tab across refreshes. Each work
 
 Overview shows the shift’s places as portraits of the accepted workers and open slots. The roster shows each worker’s latest status, with the time of an invitation, check-in or check-out. Attendance takes precedence once someone has checked in or out. A status that changes while the page is open is highlighted briefly, whoever made the change. The API retains the separate participation and attendance fields and the stable IDs. Portraits are fictional and bundled with the app.
 
-Activity shows the shift’s events newest first, grouped by Toronto date. The initial timeline contains Jordan’s invitation, acceptance, and check-in. Maya Patel is the named demo Manager for both dashboard and API invitations. An invitation and its activity entry commit together. A rejected or repeated invitation adds no entry. Reset restores the roster and adds an event to the existing timeline. When upgrading an existing database, older non-seed invitations are attributed to the demo manager role, the identity the old app recorded.
+Activity shows the shift’s events newest first, grouped by Toronto date. The initial timeline contains Jordan’s invitation, acceptance, and check-in. Maya Patel is the named demo Manager for both dashboard and API invitations. An invitation and its activity entry commit together. A rejected or repeated invitation adds no entry. Reset restores the roster and adds an event to the existing timeline. A database created by an older version of the demo is refused at startup. Delete it, or the Docker volume with `docker compose down -v`, to start again from the seed.
 
 ## Integration contract
 
@@ -104,12 +110,13 @@ Errors have the shape `{"error":{"code":"FORBIDDEN","message":"This action requi
 
 ## Implementation and checks
 
-`shared/worker-actions.ts` defines worker transitions for the UI and server. `server/staffing.ts` defines the invitation rules and counts. The HTTP layer calls `server/staffing-service.ts`, which owns each command’s transaction, receipt, and activity entry. `server/storage/sqlite.ts` opens and migrates the database. The schema belongs to this single-shift demo. Every actual change increments a persistent revision. `server/app.ts` publishes through `server/live.ts` after commit. On a new connection the server registers the stream and sends a current snapshot before it can handle another write. This closes the gap between loading the page and receiving live updates.
+`shared/worker-actions.ts` defines worker transitions for the UI and server. `server/staffing.ts` holds the staffing rules: permissions, the invitation rule, request keys and counts. Its errors carry a code, and `server/app.ts` maps each code to an HTTP status. The HTTP layer calls `server/staffing-service.ts`, which runs each command in a transaction and records its activity entry. `server/storage/sqlite.ts` creates and seeds the database and holds every SQL query. The schema belongs to this single-shift demo. Every actual change increments a persistent revision. `server/app.ts` publishes through `server/live.ts` after commit. On a new connection the server registers the stream and sends a current snapshot before it can handle another write. This closes the gap between loading the page and receiving live updates.
 
 The dashboard applies the confirmed POST response immediately. Its EventSource reconnects automatically and receives the latest complete snapshot, including changes made during an outage. The client checks revisions so a late response cannot replace newer data. Live delivery assumes one server process per database and writes through its API.
 
 ```sh
 npm run typecheck
+npm run format:check
 npm test
 npx playwright install chromium
 npm run test:e2e

@@ -14,9 +14,13 @@ export function availableActions(worker: Worker): WorkerAction[] {
   if (worker.attendance === 'checked_out') return []
   if (worker.attendance === 'checked_in') return ['check-out']
   switch (worker.participation) {
-    case 'invited': return ['accept', 'decline']
-    case 'accepted': return ['check-in', 'cancel']
-    case 'cancelled': return ['accept']
-    default: return []
+    case 'invited':
+      return ['accept', 'decline']
+    case 'accepted':
+      return ['check-in', 'cancel']
+    case 'cancelled':
+      return ['accept']
+    default:
+      return []
   }
 }
