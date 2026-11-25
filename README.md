@@ -37,17 +37,27 @@ fly secrets set PREVIEW_PASSWORD='choose-a-long-random-password'
 
 With `PREVIEW_PASSWORD` set, the server asks every visitor for that password and accepts any user name. To reset the preview from your machine, pass the password to the reset command: `APP_URL=https://oloodi-challenge-002.fly.dev PREVIEW_PASSWORD='…' npm run reset`. API callers pass it too, for example `curl -u preview:PASSWORD "$SHIFT"`. Local runs leave it unset and stay open. Keep one Machine with `fly scale count 1`, because each Machine has its own database. The preview returns to the seeded shift whenever its Machine restarts.
 
+## The data model
+
+The starter models staffing the way a real app would:
+
+- A **worker** is a person (`id`, `name`) who can be staffed on any shift.
+- A **shift** is an event that needs people: when, where, and how many.
+- An **assignment** connects one worker to one shift. An invitation creates it, and it holds that worker's participation (`invited`, `accepted`, `declined`, `cancelled`), attendance (`not_started`, `checked_in`, `checked_out`) and their times. A worker without an assignment on a shift is uninvited there.
+
+So the same worker can be checked in on one shift and only invited to another. The database and API support any number of shifts. The seed contains one, and the dashboard shows it.
+
 ## The shift
 
 **Evening event crew** (`shift-001`) runs Tuesday, November 24, 2026, from 5 to 10 p.m. Toronto time at Harbor Hall, East Entrance. The fixed date keeps every demo reproducible.
 
-| Worker | Stable ID | Initial participation | Initial attendance |
-| --- | --- | --- | --- |
-| Jordan Lee | `worker-001` | Accepted | Checked in at 4:55 p.m. |
-| Alex Chen | `worker-002` | Uninvited | Not started |
-| Alex Rivera | `worker-003` | Uninvited | Not started |
+| Worker | Stable ID | Initial assignment on `shift-001` |
+| --- | --- | --- |
+| Jordan Lee | `worker-001` | Accepted, checked in at 4:55 p.m. |
+| Alex Chen | `worker-002` | None (uninvited) |
+| Alex Rivera | `worker-003` | None (uninvited) |
 
-The shift requires **3** people. Initially **1** place is filled, **2** remain, **1** worker is checked in and **0** have checked out. Both Alexes are eligible for invitation. A first name alone is ambiguous. Inviting either worker changes participation to Invited and records the invitation time. Only acceptance fills a place.
+The shift requires **3** people. Initially **1** place is filled, **2** remain, **1** worker is checked in and **0** have checked out. Both Alexes are eligible for invitation. A first name alone is ambiguous. Inviting either worker creates their assignment with participation Invited and records the invitation time. Only acceptance fills a place.
 
 ## Try the worker flow
 
@@ -60,9 +70,9 @@ The demo keeps the role and worker selection per tab across refreshes. Each work
 
 ## Roster and activity
 
-Overview shows the shift’s places as portraits of the accepted workers and open slots. The roster shows each worker’s latest status, with the time of an invitation, check-in or check-out. Attendance takes precedence once someone has checked in or out. A status that changes while the page is open is highlighted briefly, whoever made the change. The API retains the separate participation and attendance fields and the stable IDs. Portraits are fictional and bundled with the app.
+Overview shows the shift’s places as portraits of the accepted workers and open slots. The roster shows each worker’s latest status, with the time of an invitation, check-in or check-out. Attendance takes precedence once someone has checked in or out. A status that changes while the page is open is highlighted briefly, whoever made the change. The API keeps participation and attendance as separate fields on each assignment, with stable IDs. Portraits are fictional and bundled with the app.
 
-Activity shows the shift’s events newest first, grouped by Toronto date. The initial timeline contains Jordan’s invitation, acceptance, and check-in. Maya Patel is the named demo Manager for both dashboard and API invitations. An invitation and its activity entry commit together. A rejected or repeated invitation adds no entry. Reset restores the roster and adds an event to the existing timeline. A database created by an older version of the demo is refused at startup. Delete it, or the Docker volume with `docker compose down -v`, to start again from the seed.
+Activity shows the shift’s events newest first, grouped by Toronto date. The initial timeline contains Jordan’s invitation, acceptance, and check-in. Maya Patel is the named demo Manager for both dashboard and API invitations. An invitation and its activity entry commit together. A rejected or repeated invitation adds no entry. Reset restores the seeded assignments on every shift and adds an event to the existing timeline. Workers and shifts are not changed by a reset. A database created by an older version of the demo is refused at startup. Delete it, or the Docker volume with `docker compose down -v`, to start again from the seed.
 
 ## Integration contract
 
@@ -70,11 +80,12 @@ The local role selector starts on Manager. API callers select a demo identity us
 
 | Method | Path | Success response |
 | --- | --- | --- |
-| GET | `/api/shifts/:shiftId` | Current dashboard snapshot |
+| GET | `/api/shifts` | `{ shifts }`: every shift with its staffing `counts` |
+| GET | `/api/shifts/:shiftId` | Current snapshot of one shift |
 | POST | `/api/shifts/:shiftId/workers/:workerId/invite` | Manager only. Invitation receipt and committed snapshot |
 | POST | `/api/shifts/:shiftId/workers/:workerId/:action` | Selected worker only. Actions are `accept`, `decline`, `cancel`, `check-in`, and `check-out`. Returns `{ changed, snapshot }`. |
 | GET | `/api/shifts/:shiftId/events` | SSE stream of named `snapshot` events |
-| POST | `/api/demo/reset` | Manager only. Restores the seed and returns its new snapshot |
+| POST | `/api/demo/reset` | Manager only. Restores the seeded assignments on every shift and returns the demo shift’s snapshot |
 
 All JSON endpoints return HTTP 200 on success. POST endpoints take an empty body. Worker actions require the worker role, a matching `X-Demo-Worker-Id`, and an `Idempotency-Key` (1–128 characters). Reuse the key when retrying the same action and use a fresh key for a new decision. Manager invitations also support an optional `Idempotency-Key`. A retry with the same key returns the original receipt and the current roster, even after the worker responds or the demo resets. Use a new key for a fresh invitation after a reset. The stable IDs in the path identify the target.
 
@@ -87,9 +98,9 @@ curl -sS -X POST -H 'X-Demo-Role: manager' "$SHIFT/workers/worker-002/invite"
 curl -N "$SHIFT/events"
 ```
 
-The second command returns 403. The third invites Alex Chen. Repeat it to get the same `invitation` object, including its original UTC timestamp. A repeat does not increment the revision or publish another update. Its accompanying `snapshot` is current and may include intervening changes to other workers.
+The second command returns 403. The third invites Alex Chen. Repeat it to get the same `invitation` object, including its original UTC timestamp. A repeat does not increment the revision or publish another update. Its accompanying `snapshot` is current and may include intervening changes to other assignments.
 
-The snapshot contains `shift` (ID, title, location, start/end instants, time zone, required workers), `workers` (stable IDs, full names, participation, attendance and nullable timestamps), `counts`, the ordered `activity` array, and a numeric `revision`. The invite response wraps it as `{ invitation: { shiftId, workerId, invitedAt }, snapshot }`. See [shared/types.ts](shared/types.ts) for the exact field names, types and status values.
+The snapshot contains `shift` (ID, title, location, start/end instants, time zone, required workers), `workers` (everyone who can be staffed: stable IDs and full names), `assignments` (this shift’s assignments, one per invited worker), `counts`, the ordered `activity` array, and a numeric `revision`. Activity entries carry a `shiftId`, which is null for demo resets because they apply to every shift. The revision counts changes across all shifts. The invite response wraps it as `{ invitation: { shiftId, workerId, invitedAt }, snapshot }`. See [shared/types.ts](shared/types.ts) for the exact field names, types and status values.
 
 Errors have the shape `{"error":{"code":"FORBIDDEN","message":"This action requires the Manager role."}}`.
 
@@ -99,7 +110,7 @@ Errors have the shape `{"error":{"code":"FORBIDDEN","message":"This action requi
 | 403 | `FORBIDDEN` | Viewer attempts an invitation or reset |
 | 404 | `SHIFT_NOT_FOUND`, `WORKER_NOT_FOUND`, `NOT_FOUND` | Unknown shift, worker or route |
 | 405 | `METHOD_NOT_ALLOWED` | Known endpoint, wrong HTTP method |
-| 409 | `INVALID_TRANSITION` | A manager tries to invite the already accepted worker |
+| 409 | `INVALID_TRANSITION` | A manager invites a worker who already has a non-invited assignment on the shift, or a worker acts without a matching assignment state |
 
 ## See a change on an open dashboard
 
@@ -110,7 +121,7 @@ Errors have the shape `{"error":{"code":"FORBIDDEN","message":"This action requi
 
 ## Implementation and checks
 
-`shared/worker-actions.ts` defines worker transitions for the UI and server. `server/staffing.ts` holds the staffing rules: permissions, the invitation rule, request keys and counts. Its errors carry a code, and `server/app.ts` maps each code to an HTTP status. The HTTP layer calls `server/staffing-service.ts`, which runs each command in a transaction and records its activity entry. `server/storage/sqlite.ts` creates and seeds the database and holds every SQL query. The schema belongs to this single-shift demo. Every actual change increments a persistent revision. `server/app.ts` publishes through `server/live.ts` after commit. On a new connection the server registers the stream and sends a current snapshot before it can handle another write. This closes the gap between loading the page and receiving live updates.
+`shared/worker-actions.ts` defines worker transitions for the UI and server. `server/staffing.ts` holds the staffing rules: permissions, the invitation rule, request keys and counts. Its errors carry a code, and `server/app.ts` maps each code to an HTTP status. The HTTP layer calls `server/staffing-service.ts`, which runs each command in a transaction and records its activity entry. `server/storage/sqlite.ts` creates and seeds the database and holds every SQL query. Its schema has `shifts`, `workers` and `assignments` tables, and the database enforces the assignment rules with constraints. Every actual change increments a persistent revision. `server/app.ts` publishes through `server/live.ts` after commit. Each stream follows one shift and receives only that shift’s snapshots. On a new connection the server registers the stream and sends a current snapshot before it can handle another write. This closes the gap between loading the page and receiving live updates.
 
 The dashboard applies the confirmed POST response immediately. Its EventSource reconnects automatically and receives the latest complete snapshot, including changes made during an outage. The client checks revisions so a late response cannot replace newer data. Live delivery assumes one server process per database and writes through its API.
 
@@ -124,4 +135,4 @@ npm run test:e2e
 
 On Linux CI, install browser system dependencies with `npx playwright install --with-deps chromium`. To use an existing Chromium, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` to its executable path.
 
-The API tests use isolated SQLite databases and a controllable clock. They cover permissions, invalid transitions, repeat and concurrent writes, counts, reset, and persistence after restart. The Playwright tests run isolated app instances. They check an API invitation reaching an open Viewer tab, a manual invite while the stream is down, and recovery after a missed update. The recovery test closes the real connection, holds the reconnect request, writes from an independent API client, checks that the row is still stale, and releases the request. It checks that the original browser document stays mounted.
+The API tests use isolated SQLite databases and a controllable clock. They cover permissions, invalid transitions, repeat and concurrent writes, counts, reset, persistence after restart, and a second shift where the same worker has an independent assignment, history and live stream. The Playwright tests run isolated app instances. They check an API invitation reaching an open Viewer tab, a manual invite while the stream is down, and recovery after a missed update. The recovery test closes the real connection, holds the reconnect request, writes from an independent API client, checks that the row is still stale, and releases the request. It checks that the original browser document stays mounted.

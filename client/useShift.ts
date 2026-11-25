@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { WorkerAction } from '../shared/worker-actions'
+import { demoShiftId } from '../shared/types'
 import type { Role, Snapshot } from '../shared/types'
 
-const endpoint = '/api/shifts/shift-001'
+const endpoint = '/api/shifts/' + demoShiftId
 type Connection = 'Connecting' | 'Live' | 'Reconnecting'
 
 export function useShift() {

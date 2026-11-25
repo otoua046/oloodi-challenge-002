@@ -1,4 +1,4 @@
-import type { Worker } from './types.ts'
+import type { Assignment } from './types.ts'
 
 export const workerActions = {
   accept: { label: 'Accept shift', event: 'accepted' },
@@ -10,10 +10,11 @@ export const workerActions = {
 
 export type WorkerAction = keyof typeof workerActions
 
-export function availableActions(worker: Worker): WorkerAction[] {
-  if (worker.attendance === 'checked_out') return []
-  if (worker.attendance === 'checked_in') return ['check-out']
-  switch (worker.participation) {
+// What a worker can do next on one shift. Without an assignment there is nothing to respond to.
+export function availableActions(assignment: Assignment | undefined): WorkerAction[] {
+  if (!assignment || assignment.attendance === 'checked_out') return []
+  if (assignment.attendance === 'checked_in') return ['check-out']
+  switch (assignment.participation) {
     case 'invited':
       return ['accept', 'decline']
     case 'accepted':

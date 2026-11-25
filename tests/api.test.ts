@@ -10,7 +10,7 @@ import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { test, type TestContext } from 'node:test'
 import { createApp } from '../server/app.ts'
-import type { InviteResponse, Snapshot } from '../shared/types.ts'
+import type { InviteResponse, ShiftSummary, Snapshot } from '../shared/types.ts'
 
 const shift = '/api/shifts/shift-001'
 const invite = (id: string) => `${shift}/workers/${id}/invite`
@@ -48,6 +48,25 @@ async function fixture(t: TestContext, now?: () => string) {
   return app.request
 }
 
+// Reads named snapshot events from a server-sent event stream, one at a time.
+function snapshotStream(response: Response) {
+  const reader = response.body!.pipeThrough(new TextDecoderStream()).getReader()
+  let buffered = ''
+  return async function nextSnapshot(): Promise<Snapshot> {
+    while (!buffered.includes('\n\n')) {
+      const part = await reader.read()
+      assert.ok(!part.done, 'stream closed before delivering a snapshot')
+      buffered += part.value
+    }
+    const end = buffered.indexOf('\n\n')
+    const frame = buffered.slice(0, end)
+    buffered = buffered.slice(end + 2)
+    const data = frame.split('\n').find(line => line.startsWith('data: '))
+    assert.ok(data)
+    return JSON.parse(data.slice(6))
+  }
+}
+
 async function success<T>(response: Response): Promise<T> {
   const body = await response.text()
   assert.equal(response.status, 200, body)
@@ -66,11 +85,22 @@ test('both roles can read the same seeded shift and distinguish the two Alexes',
   assert.deepEqual(await success(await request(shift)), seed)
   assert.equal(seed.shift.requiredWorkers, 3)
   assert.deepEqual(seed.counts, { filled: 1, remaining: 2, checkedIn: 1, checkedOut: 0 })
-  const roster = seed.workers.map(({ id, name, participation, attendance }) => [id, name, participation, attendance])
-  assert.deepEqual(roster.sort(), [
-    ['worker-001', 'Jordan Lee', 'accepted', 'checked_in'],
-    ['worker-002', 'Alex Chen', 'uninvited', 'not_started'],
-    ['worker-003', 'Alex Rivera', 'uninvited', 'not_started'],
+  assert.deepEqual(seed.workers, [
+    { id: 'worker-001', name: 'Jordan Lee' },
+    { id: 'worker-002', name: 'Alex Chen' },
+    { id: 'worker-003', name: 'Alex Rivera' },
+  ])
+  // Only Jordan has an assignment. Both Alexes are uninvited because they have none.
+  assert.deepEqual(seed.assignments, [
+    {
+      shiftId: 'shift-001',
+      workerId: 'worker-001',
+      participation: 'accepted',
+      attendance: 'checked_in',
+      invitedAt: '2026-11-23T16:00:00.000Z',
+      checkedInAt: '2026-11-24T21:55:00.000Z',
+      checkedOutAt: null,
+    },
   ])
 })
 
@@ -101,8 +131,9 @@ test('repeat invite preserves the first timestamp, revision, and staffing counts
   const first = await success<InviteResponse>(await request(invite('worker-002'), 'POST', 'manager'))
   assert.deepEqual(first.invitation, { workerId: 'worker-002', shiftId: 'shift-001', invitedAt: time })
   assert.partialDeepStrictEqual(
-    first.snapshot.workers.find(w => w.id === 'worker-002'),
+    first.snapshot.assignments.find(a => a.workerId === 'worker-002'),
     {
+      shiftId: 'shift-001',
       participation: 'invited',
       attendance: 'not_started',
       invitedAt: time,
@@ -129,10 +160,10 @@ test('interleaved invitations produce one mutation per worker; reset restores th
   assert.equal(after.revision, seed.revision + 2)
   assert.deepEqual(after.counts, seed.counts)
   ids.forEach((id, index) => {
-    const worker = after.workers.find(w => w.id === id)
-    assert.ok(worker)
-    assert.equal(worker.participation, 'invited')
-    assert.deepEqual(receipts[index], { shiftId: seed.shift.id, workerId: id, invitedAt: worker.invitedAt })
+    const assignment = after.assignments.find(a => a.workerId === id)
+    assert.ok(assignment)
+    assert.equal(assignment.participation, 'invited')
+    assert.deepEqual(receipts[index], { shiftId: seed.shift.id, workerId: id, invitedAt: assignment.invitedAt })
   })
   const restored = await success<Snapshot>(await request(reset, 'POST', 'manager'))
   assert.deepEqual(restored, { ...seed, activity: restored.activity, revision: after.revision + 1 })
@@ -224,7 +255,7 @@ test('worker decisions enforce identity, preserve retries, and update counts and
   await success(await request(reset, 'POST', 'manager'))
   await success(await request(invite(id), 'POST', 'manager'))
   const declined = await post('decline', 'f')
-  assert.equal(declined.snapshot.workers.find(w => w.id === id)?.participation, 'declined')
+  assert.equal(declined.snapshot.assignments.find(a => a.workerId === id)?.participation, 'declined')
   assert.equal(declined.snapshot.counts.filled, 1)
   await failure(await action('check-in', 'g'), 409, 'INVALID_TRANSITION')
 })
@@ -274,8 +305,8 @@ test('a database from another demo version or another app is refused with a clea
   const dir = await mkdtemp(join(tmpdir(), 'staffing-old-'))
   t.after(() => rm(dir, { recursive: true, force: true }))
   for (const [name, setup] of [
-    ['older', 'PRAGMA user_version = 1'],
-    ['newer', 'PRAGMA user_version = 3'],
+    ['older', 'PRAGMA user_version = 2'],
+    ['newer', 'PRAGMA user_version = 4'],
   ] as const) {
     const file = join(dir, name + '.db')
     openStaffing(file).close()
@@ -314,21 +345,7 @@ test('a large shift history and subsequent live update arrive on the same connec
       {},
       AbortSignal.any([abort.signal, AbortSignal.timeout(8000)]),
     )
-    const reader = response.body!.pipeThrough(new TextDecoderStream()).getReader()
-    let buffered = ''
-    async function nextSnapshot(): Promise<Snapshot> {
-      while (!buffered.includes('\n\n')) {
-        const part = await reader.read()
-        assert.ok(!part.done, 'stream closed before delivering a snapshot')
-        buffered += part.value
-      }
-      const end = buffered.indexOf('\n\n')
-      const frame = buffered.slice(0, end)
-      buffered = buffered.slice(end + 2)
-      const data = frame.split('\n').find(line => line.startsWith('data: '))
-      assert.ok(data)
-      return JSON.parse(data.slice(6))
-    }
+    const nextSnapshot = snapshotStream(response)
     const initial = await nextSnapshot()
     assert.equal(initial.activity.length, 1803)
     const reply = await success<InviteResponse>(await app.request(invite('worker-002'), 'POST', 'manager'))
@@ -372,5 +389,84 @@ test('the reset command restores a password-protected deployment', async t => {
   const { stdout } = await run({ PREVIEW_PASSWORD: 'tide-preview' })
   assert.match(stdout, /^Demo restored at revision \d+/)
   const after = await success<Snapshot>(await app.request(shift, 'GET', undefined, auth))
-  assert.equal(after.workers.find(worker => worker.id === 'worker-002')?.participation, 'uninvited')
+  assert.equal(
+    after.assignments.find(assignment => assignment.workerId === 'worker-002'),
+    undefined,
+  )
+})
+
+test('a worker has an independent assignment, history and live stream on each shift', async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'staffing-shifts-'))
+  t.after(() => rm(dir, { recursive: true, force: true }))
+  const file = join(dir, 'shifts.db')
+  openStaffing(file).close()
+  const sqlite = new DatabaseSync(file)
+  sqlite.exec(`INSERT INTO shifts (id, title, location, startsAt, endsAt, timeZone, requiredWorkers)
+    VALUES ('shift-002', 'Morning load-in', 'Harbor Hall, Loading Dock',
+            '2026-11-26T13:00:00.000Z', '2026-11-26T17:00:00.000Z', 'America/Toronto', 2)`)
+  sqlite.close()
+  const app = await start(file)
+  const abort = new AbortController()
+  t.after(async () => {
+    abort.abort()
+    await app.close()
+  })
+  const second = '/api/shifts/shift-002'
+  const jordan = (path: string, action: string, key: string) =>
+    app.request(path + '/workers/worker-001/' + action, 'POST', 'worker', {
+      'X-Demo-Worker-Id': 'worker-001',
+      'Idempotency-Key': key,
+    })
+
+  const listed = await success<{ shifts: ShiftSummary[] }>(await app.request('/api/shifts'))
+  assert.deepEqual(
+    listed.shifts.map(item => [item.id, item.counts.filled, item.counts.remaining]),
+    [
+      ['shift-001', 1, 2],
+      ['shift-002', 0, 2],
+    ],
+  )
+  const stream = await app.request(second + '/events', 'GET', undefined, {}, abort.signal)
+  const nextSecond = snapshotStream(stream)
+  assert.deepEqual((await nextSecond()).assignments, [])
+
+  // Jordan is checked in on the first shift and can still be invited to, and accept, the second.
+  await success(await app.request(invite('worker-003'), 'POST', 'manager'))
+  const invited = await success<InviteResponse>(
+    await app.request(second + '/workers/worker-001/invite', 'POST', 'manager'),
+  )
+  assert.deepEqual(
+    invited.snapshot.assignments.map(a => [a.workerId, a.participation, a.attendance]),
+    [['worker-001', 'invited', 'not_started']],
+  )
+  // The second shift's stream skips the first shift's invitation and delivers its own.
+  assert.deepEqual(await nextSecond(), invited.snapshot)
+
+  // Request keys belong to one assignment, so the same key works on each shift.
+  const accepted = await success<{ snapshot: Snapshot }>(await jordan(second, 'accept', 'same-key'))
+  assert.deepEqual(accepted.snapshot.counts, { filled: 1, remaining: 1, checkedIn: 0, checkedOut: 0 })
+  const leftFirst = await success<{ snapshot: Snapshot }>(await jordan(shift, 'check-out', 'same-key'))
+  const onFirst = leftFirst.snapshot.assignments.find(a => a.workerId === 'worker-001')
+  assert.equal(onFirst?.attendance, 'checked_out')
+  const secondNow = await success<Snapshot>(await app.request(second))
+  assert.deepEqual(
+    secondNow.assignments.map(a => [a.workerId, a.participation, a.attendance]),
+    [['worker-001', 'accepted', 'not_started']],
+  )
+  assert.deepEqual(
+    secondNow.activity.map(e => [e.kind, e.shiftId]),
+    [
+      ['accepted', 'shift-002'],
+      ['invited', 'shift-002'],
+    ],
+  )
+  assert.ok(leftFirst.snapshot.activity.every(e => e.shiftId === 'shift-001'))
+
+  // A reset restores the seeded assignments on every shift and reaches every open stream.
+  await nextSecond()
+  await success(await app.request(reset, 'POST', 'manager'))
+  const afterReset = await nextSecond()
+  assert.deepEqual(afterReset.assignments, [])
+  assert.deepEqual([afterReset.activity[0]?.kind, afterReset.activity[0]?.shiftId], ['reset', null])
+  assert.deepEqual(afterReset, await success<Snapshot>(await app.request(second)))
 })
