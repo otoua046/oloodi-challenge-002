@@ -42,17 +42,18 @@ export function useShift() {
     }
   }, [applySnapshot])
 
-  async function write(workerId: string, action: string, headers: Record<string, string>) {
-    const response = await fetch(endpoint + '/workers/' + encodeURIComponent(workerId) + '/' + action, {
-      method: 'POST',
-      headers,
-    })
+  async function post<T>(path: string, headers: Record<string, string>): Promise<T> {
+    const response = await fetch(path, { method: 'POST', headers })
     if (!response.ok) {
       const problem = await response.json().catch(() => null)
       throw new Error(problem?.error?.message ?? 'Could not confirm the change. Try again.')
     }
-    const result = (await response.json()) as { snapshot: Snapshot }
-    applySnapshot(result.snapshot)
+    return (await response.json()) as T
+  }
+
+  async function write(workerId: string, action: string, headers: Record<string, string>) {
+    const path = endpoint + '/workers/' + encodeURIComponent(workerId) + '/' + action
+    applySnapshot((await post<{ snapshot: Snapshot }>(path, headers)).snapshot)
   }
 
   function invite(workerId: string, role: Role) {
@@ -71,5 +72,9 @@ export function useShift() {
     })
   }
 
-  return { snapshot, invite, respond, connection, loadError }
+  async function reset(role: Role) {
+    applySnapshot(await post<Snapshot>('/api/demo/reset', { 'X-Demo-Role': role }))
+  }
+
+  return { snapshot, invite, respond, reset, connection, loadError }
 }

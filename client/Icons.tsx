@@ -53,6 +53,12 @@ const paths = {
     </>
   ),
   down: <path d="m7 10 5 5 5-5" />,
+  reset: (
+    <>
+      <path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3L4.5 9" />
+      <path d="M4.5 4.5V9H9" />
+    </>
+  ),
   check: <path d="m5 12.5 4.5 4.5L19 7.5" />,
   x: <path d="m6.5 6.5 11 11m0-11-11 11" />,
 } satisfies Record<string, ReactNode>

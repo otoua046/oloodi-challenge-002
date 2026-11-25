@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { execFile } from 'node:child_process'
 import { once } from 'node:events'
 import { DatabaseSync } from 'node:sqlite'
 import { openStaffing } from '../server/staffing-service.ts'
@@ -6,6 +7,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { promisify } from 'node:util'
 import { test, type TestContext } from 'node:test'
 import { createApp } from '../server/app.ts'
 import type { InviteResponse, Snapshot } from '../shared/types.ts'
@@ -37,7 +39,7 @@ async function start(databasePath = ':memory:', now?: () => string, previewPassw
       headers: role === undefined ? headers : { ...headers, 'X-Demo-Role': role },
     })
   }
-  return { request, close }
+  return { request, close, url: `http://127.0.0.1:${port}` }
 }
 
 async function fixture(t: TestContext, now?: () => string) {
@@ -356,4 +358,19 @@ test('a preview password closes every route until the browser supplies it', asyn
 
   await success(await app.request(shift, 'GET', undefined, basic('anyone:tide-preview')))
   await success(await app.request(invite('worker-002'), 'POST', 'manager', basic(':tide-preview')))
+})
+
+test('the reset command restores a password-protected deployment', async t => {
+  const app = await start(':memory:', undefined, 'tide-preview')
+  t.after(app.close)
+  const auth = { Authorization: 'Basic ' + Buffer.from(':tide-preview').toString('base64') }
+  const run = (env: Record<string, string>) =>
+    promisify(execFile)(process.execPath, ['scripts/reset.mjs'], { env: { ...process.env, APP_URL: app.url, ...env } })
+
+  await success(await app.request(invite('worker-002'), 'POST', 'manager', auth))
+  await assert.rejects(run({ PREVIEW_PASSWORD: '' }), /HTTP 401/)
+  const { stdout } = await run({ PREVIEW_PASSWORD: 'tide-preview' })
+  assert.match(stdout, /^Demo restored at revision \d+/)
+  const after = await success<Snapshot>(await app.request(shift, 'GET', undefined, auth))
+  assert.equal(after.workers.find(worker => worker.id === 'worker-002')?.participation, 'uninvited')
 })

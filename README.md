@@ -16,7 +16,7 @@ From the repository root, run:
 docker compose up --build
 ```
 
-Open **http://127.0.0.1:3000**. The first start seeds the database. Later starts reuse it. To restore the seed while the app is running, use `docker compose exec staffing npm run reset`. To stop, use `docker compose down`.
+Open **http://127.0.0.1:3000**. The first start seeds the database. Later starts reuse it. To restore the seed while the app is running, choose **Reset demo** above the roster as the Manager, or run `docker compose exec staffing npm run reset`. To stop, use `docker compose down`.
 
 For local development, use **Node 24.12 or later** and npm:
 
@@ -35,7 +35,7 @@ npm start
 fly secrets set PREVIEW_PASSWORD='choose-a-long-random-password'
 ```
 
-With `PREVIEW_PASSWORD` set, the server asks every visitor for that password and accepts any user name. API callers pass it too, for example `curl -u preview:PASSWORD "$SHIFT"`. Local runs leave it unset and stay open. Keep one Machine with `fly scale count 1`, because each Machine has its own database. The preview returns to the seeded shift whenever its Machine restarts.
+With `PREVIEW_PASSWORD` set, the server asks every visitor for that password and accepts any user name. To reset the preview from your machine, pass the password to the reset command: `APP_URL=https://oloodi-challenge-002.fly.dev PREVIEW_PASSWORD='…' npm run reset`. API callers pass it too, for example `curl -u preview:PASSWORD "$SHIFT"`. Local runs leave it unset and stay open. Keep one Machine with `fly scale count 1`, because each Machine has its own database. The preview returns to the seeded shift whenever its Machine restarts.
 
 ## The shift
 

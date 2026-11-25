@@ -180,3 +180,21 @@ test('activity uses the affected worker portrait, falls back to initials, and di
   await expect(page.getByRole('listitem').filter({ hasText: 'restored the demo roster' }).locator('img')).toHaveCount(0)
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
 })
+
+test('a manager resets the demo from the roster after confirming', async ({ app, page }) => {
+  await openDashboard(page, app.url)
+  await page.getByRole('button', { name: 'Invite Alex Chen' }).click()
+  await expect(row(page, 'Alex Chen').getByText('Invited', { exact: true })).toBeVisible()
+
+  page.once('dialog', dialog => void dialog.dismiss())
+  await page.getByRole('button', { name: 'Reset demo' }).click()
+  await expect(row(page, 'Alex Chen').getByText('Invited', { exact: true })).toBeVisible()
+
+  page.once('dialog', dialog => void dialog.accept())
+  await page.getByRole('button', { name: 'Reset demo' }).click()
+  await expect(page.getByText('The demo is back to the starting roster.')).toBeVisible()
+  await expect(row(page, 'Alex Chen').getByText('Uninvited', { exact: true })).toBeVisible()
+
+  await page.getByLabel('Demo role').selectOption('viewer')
+  await expect(page.getByRole('button', { name: 'Reset demo' })).toHaveCount(0)
+})

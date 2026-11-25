@@ -12,7 +12,7 @@ import { useShift } from './useShift'
 import './style.css'
 
 function App() {
-  const { snapshot, connection, loadError, invite, respond } = useShift()
+  const { snapshot, connection, loadError, invite, respond, reset } = useShift()
   const [role, setRole] = useState<Role>(() => {
     const saved = sessionStorage.getItem('demo-role')
     return saved === 'viewer' || saved === 'worker' ? saved : 'manager'
@@ -42,7 +42,7 @@ function App() {
     if (role === 'worker') {
       return worker && <WorkerShift key={worker.id} worker={worker} snapshot={snapshot} respond={respond} />
     }
-    return <Roster snapshot={snapshot} role={role} invite={invite} />
+    return <Roster snapshot={snapshot} role={role} invite={invite} reset={reset} />
   }
 
   const page = snapshot && (

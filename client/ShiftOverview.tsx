@@ -117,12 +117,15 @@ export function Roster({
   snapshot,
   role,
   invite,
+  reset,
 }: {
   snapshot: Snapshot
   role: Role
   invite: (id: string, role: Role) => Promise<void>
+  reset: (role: Role) => Promise<void>
 }) {
   const [pending, setPending] = useState<string[]>([])
+  const [resetting, setResetting] = useState(false)
   const [feedback, setFeedback] = useState<{ message: string; error?: boolean } | null>(null)
   async function sendInvite(worker: Worker) {
     setPending(ids => [...ids, worker.id])
@@ -142,15 +145,45 @@ export function Roster({
       setPending(ids => ids.filter(id => id !== worker.id))
     }
   }
+  async function resetDemo() {
+    const confirmed = window.confirm(
+      'Reset the demo for everyone viewing it? Every worker returns to the starting roster. The activity history is kept.',
+    )
+    if (!confirmed) return
+    setResetting(true)
+    setFeedback(null)
+    try {
+      await reset(role)
+      setFeedback({ message: 'The demo is back to the starting roster.' })
+    } catch (error) {
+      const message =
+        error instanceof TypeError
+          ? 'Could not reach the server. Try the reset again.'
+          : error instanceof Error
+            ? error.message
+            : 'The reset could not be confirmed.'
+      setFeedback({ message, error: true })
+    } finally {
+      setResetting(false)
+    }
+  }
   const canInvite = role === 'manager'
   return (
     <section className="panel roster" aria-labelledby="roster-title">
       <div className="panel-heading">
         <h2 id="roster-title">Worker roster</h2>
-        <span className="worker-total">
-          <Icon name="people" size={15} />
-          {snapshot.workers.length} workers
-        </span>
+        <div className="panel-actions">
+          <span className="worker-total">
+            <Icon name="people" size={15} />
+            {snapshot.workers.length} workers
+          </span>
+          {canInvite && (
+            <button type="button" className="reset-demo" disabled={resetting} onClick={() => void resetDemo()}>
+              <Icon name="reset" size={14} />
+              {resetting ? 'Resetting…' : 'Reset demo'}
+            </button>
+          )}
+        </div>
       </div>
       {role === 'viewer' && (
         <p className="viewer-note">Viewer access is read-only. Switch to Manager to invite workers.</p>
