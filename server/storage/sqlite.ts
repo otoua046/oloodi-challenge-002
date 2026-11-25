@@ -52,13 +52,11 @@ const seedRoster = `
 `
 
 // Jordan's history up to the seeded check-in. Reset keeps the timeline, so this runs only for a new database.
-const seedActivity = `
-  INSERT INTO activity (kind, actor, workerId, workerName, occurredAt)
-  VALUES
-    ('invited', '${demoManager}', 'worker-001', 'Jordan Lee', '2026-11-23T16:00:00.000Z'),
-    ('accepted', 'Jordan Lee', 'worker-001', 'Jordan Lee', '2026-11-23T16:18:00.000Z'),
-    ('checked_in', 'Jordan Lee', 'worker-001', 'Jordan Lee', '2026-11-24T21:55:00.000Z');
-`
+const seedActivity: [ActivityEvent['kind'], string, string, string, string][] = [
+  ['invited', demoManager, 'worker-001', 'Jordan Lee', '2026-11-23T16:00:00.000Z'],
+  ['accepted', 'Jordan Lee', 'worker-001', 'Jordan Lee', '2026-11-23T16:18:00.000Z'],
+  ['checked_in', 'Jordan Lee', 'worker-001', 'Jordan Lee', '2026-11-24T21:55:00.000Z'],
+]
 
 export function openShiftDatabase(databasePath: string) {
   if (databasePath !== ':memory:') mkdirSync(dirname(databasePath), { recursive: true })
@@ -79,16 +77,20 @@ export function openShiftDatabase(databasePath: string) {
 
   try {
     transaction('write', () => {
-      const fresh = !db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'workers'").get()
+      // Only an empty file counts as new. Anything else must carry the current schema version.
+      const fresh = !db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' LIMIT 1").get()
       if (fresh) {
         db.exec(schema)
         db.exec(`PRAGMA user_version = ${schemaVersion}`)
         db.exec('INSERT INTO state VALUES (1, 1)')
         db.exec(seedRoster)
-        db.exec(seedActivity)
+        const addSeedEvent = db.prepare(
+          'INSERT INTO activity (kind, actor, workerId, workerName, occurredAt) VALUES (?, ?, ?, ?, ?)',
+        )
+        for (const event of seedActivity) addSeedEvent.run(...event)
       } else if (db.prepare('PRAGMA user_version').get()?.user_version !== schemaVersion) {
         throw new Error(
-          `${databasePath} was created by an older version of this demo. ` +
+          `${databasePath} was created by another version of this demo. ` +
             'Delete it (with Docker: docker compose down -v) and start again from the seed.',
         )
       }

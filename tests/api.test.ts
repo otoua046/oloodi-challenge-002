@@ -268,15 +268,25 @@ test('a failed write rolls back the whole invitation', async t => {
   }
 })
 
-test('a database from an older demo is refused with a clear message', async t => {
+test('a database from another demo version or another app is refused with a clear message', async t => {
   const dir = await mkdtemp(join(tmpdir(), 'staffing-old-'))
   t.after(() => rm(dir, { recursive: true, force: true }))
-  const file = join(dir, 'shift.db')
-  openStaffing(file).close()
-  const sqlite = new DatabaseSync(file)
-  sqlite.exec('PRAGMA user_version = 1')
+  for (const [name, setup] of [
+    ['older', 'PRAGMA user_version = 1'],
+    ['newer', 'PRAGMA user_version = 3'],
+  ] as const) {
+    const file = join(dir, name + '.db')
+    openStaffing(file).close()
+    const sqlite = new DatabaseSync(file)
+    sqlite.exec(setup)
+    sqlite.close()
+    assert.throws(() => openStaffing(file), /created by another version of this demo/)
+  }
+  const foreign = join(dir, 'foreign.db')
+  const sqlite = new DatabaseSync(foreign)
+  sqlite.exec('CREATE TABLE notes (body TEXT)')
   sqlite.close()
-  assert.throws(() => openStaffing(file), /older version of this demo/)
+  assert.throws(() => openStaffing(foreign), /created by another version of this demo/)
 })
 
 test('a large shift history and subsequent live update arrive on the same connection', async t => {
