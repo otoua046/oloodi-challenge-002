@@ -442,7 +442,7 @@ test('a worker has an independent assignment, history and live stream on each sh
   // The second shift's stream skips the first shift's invitation and delivers its own.
   assert.deepEqual(await nextSecond(), invited.snapshot)
 
-  // Request keys belong to one assignment, so the same key works on each shift.
+  // Worker-action keys belong to one assignment, so the same key works on each shift.
   const accepted = await success<{ snapshot: Snapshot }>(await jordan(second, 'accept', 'same-key'))
   assert.deepEqual(accepted.snapshot.counts, { filled: 1, remaining: 1, checkedIn: 0, checkedOut: 0 })
   const leftFirst = await success<{ snapshot: Snapshot }>(await jordan(shift, 'check-out', 'same-key'))
@@ -469,4 +469,23 @@ test('a worker has an independent assignment, history and live stream on each sh
   assert.deepEqual(afterReset.assignments, [])
   assert.deepEqual([afterReset.activity[0]?.kind, afterReset.activity[0]?.shiftId], ['reset', null])
   assert.deepEqual(afterReset, await success<Snapshot>(await app.request(second)))
+
+  // Invitation keys are scoped to their shift: one key can invite on each shift, but not two workers on one.
+  const keyed = { 'Idempotency-Key': 'invite-key' }
+  await success(await app.request(invite('worker-002'), 'POST', 'manager', keyed))
+  const onSecond = await success<InviteResponse>(
+    await app.request(second + '/workers/worker-002/invite', 'POST', 'manager', keyed),
+  )
+  assert.equal(onSecond.invitation.shiftId, 'shift-002')
+  assert.deepEqual(
+    onSecond.snapshot.assignments.map(a => [a.workerId, a.participation]),
+    [['worker-002', 'invited']],
+  )
+  await failure(
+    await app.request(second + '/workers/worker-003/invite', 'POST', 'manager', keyed),
+    409,
+    'REQUEST_KEY_REUSED',
+  )
+  await failure(await app.request('/api/shifts', 'POST', 'manager'), 405, 'METHOD_NOT_ALLOWED')
+  await failure(await app.request('/api/shifts', 'GET', 'owner'), 400, 'INVALID_ROLE')
 })

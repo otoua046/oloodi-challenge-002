@@ -51,9 +51,9 @@ export function openStaffing(databasePath: string, now: () => string = () => new
       const shift = requireShift(store.findShift(shiftId))
       if (key !== undefined) requireRequestKey(key)
       if (key) {
-        const receipt = store.invitationReceipt(key)
+        const receipt = store.invitationReceipt(shiftId, key)
         if (receipt) {
-          if (receipt.shiftId !== shiftId || receipt.workerId !== workerId) {
+          if (receipt.workerId !== workerId) {
             throw new StaffingError('REQUEST_KEY_REUSED', 'This key identifies a different invitation.')
           }
           const invitation = { shiftId, workerId, invitedAt: receipt.invitedAt }

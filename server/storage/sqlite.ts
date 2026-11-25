@@ -37,17 +37,18 @@ const schema = `
     CHECK ((attendance = 'checked_out') = (checkedOutAt IS NOT NULL))
   ) STRICT;
   CREATE TABLE invitation_receipts (
-    requestKey TEXT PRIMARY KEY,
-    shiftId TEXT NOT NULL,
-    workerId TEXT NOT NULL,
-    invitedAt TEXT NOT NULL
+    shiftId TEXT NOT NULL REFERENCES shifts(id),
+    requestKey TEXT NOT NULL,
+    workerId TEXT NOT NULL REFERENCES workers(id),
+    invitedAt TEXT NOT NULL,
+    PRIMARY KEY (shiftId, requestKey)
   ) STRICT;
   CREATE TABLE activity (
     id INTEGER PRIMARY KEY,
     kind TEXT NOT NULL CHECK (kind IN ('invited','accepted','declined','cancelled','checked_in','checked_out','reset')),
     actor TEXT NOT NULL,
     shiftId TEXT REFERENCES shifts(id),
-    workerId TEXT,
+    workerId TEXT REFERENCES workers(id),
     workerName TEXT,
     occurredAt TEXT NOT NULL,
     requestKey TEXT,
@@ -146,7 +147,7 @@ export function openShiftDatabase(databasePath: string) {
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
     ),
     eventForKey: db.prepare('SELECT kind FROM activity WHERE shiftId = ? AND workerId = ? AND requestKey = ?'),
-    receipt: db.prepare('SELECT shiftId, workerId, invitedAt FROM invitation_receipts WHERE requestKey = ?'),
+    receipt: db.prepare('SELECT workerId, invitedAt FROM invitation_receipts WHERE shiftId = ? AND requestKey = ?'),
     addReceipt: db.prepare(
       'INSERT INTO invitation_receipts(requestKey, shiftId, workerId, invitedAt) VALUES (?, ?, ?, ?)',
     ),
@@ -189,9 +190,10 @@ export function openShiftDatabase(databasePath: string) {
     },
     eventKindForKey: (shiftId: string, workerId: string, key: string) =>
       sql.eventForKey.get(shiftId, workerId, key)?.kind as ActivityEvent['kind'] | undefined,
-    invitationReceipt(key: string) {
-      const row = sql.receipt.get(key)
-      return row && { shiftId: String(row.shiftId), workerId: String(row.workerId), invitedAt: String(row.invitedAt) }
+    // Invitation keys are scoped to their shift, as worker-action keys are scoped to one assignment.
+    invitationReceipt(shiftId: string, key: string) {
+      const row = sql.receipt.get(shiftId, key)
+      return row && { workerId: String(row.workerId), invitedAt: String(row.invitedAt) }
     },
     saveInvitationReceipt: (key: string, shiftId: string, workerId: string, invitedAt: string) => {
       sql.addReceipt.run(key, shiftId, workerId, invitedAt)

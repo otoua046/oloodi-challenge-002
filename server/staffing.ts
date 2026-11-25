@@ -37,7 +37,7 @@ export function requireShift(shift: Shift | undefined): Shift {
 }
 
 export function requireWorker(worker: Worker | undefined): Worker {
-  if (!worker) throw new StaffingError('WORKER_NOT_FOUND', 'Worker not found on this shift.')
+  if (!worker) throw new StaffingError('WORKER_NOT_FOUND', 'Worker not found.')
   return worker
 }
 

@@ -87,7 +87,7 @@ The local role selector starts on Manager. API callers select a demo identity us
 | GET | `/api/shifts/:shiftId/events` | SSE stream of named `snapshot` events |
 | POST | `/api/demo/reset` | Manager only. Restores the seeded assignments on every shift and returns the demo shift’s snapshot |
 
-All JSON endpoints return HTTP 200 on success. POST endpoints take an empty body. Worker actions require the worker role, a matching `X-Demo-Worker-Id`, and an `Idempotency-Key` (1–128 characters). Reuse the key when retrying the same action and use a fresh key for a new decision. Manager invitations also support an optional `Idempotency-Key`. A retry with the same key returns the original receipt and the current roster, even after the worker responds or the demo resets. Use a new key for a fresh invitation after a reset. The stable IDs in the path identify the target.
+All JSON endpoints return HTTP 200 on success. POST endpoints take an empty body. Worker actions require the worker role, a matching `X-Demo-Worker-Id`, and an `Idempotency-Key` (1–128 characters). Reuse the key when retrying the same action and use a fresh key for a new decision. Keys are scoped to the shift in the path, and worker-action keys also to that worker, so the same key can be used on another shift. Manager invitations also support an optional `Idempotency-Key`. A retry with the same key returns the original receipt and the current roster, even after the worker responds or the demo resets. Use a new key for a fresh invitation after a reset. The stable IDs in the path identify the target.
 
 ```sh
 BASE=http://127.0.0.1:3000
