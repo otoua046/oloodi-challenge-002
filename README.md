@@ -110,6 +110,7 @@ The dashboard applies the confirmed POST response immediately. Its EventSource r
 
 ```sh
 npm run typecheck
+npm run format:check
 npm test
 npx playwright install chromium
 npm run test:e2e
