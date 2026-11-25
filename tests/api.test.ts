@@ -214,31 +214,35 @@ test('a keyed manager invitation can be retried after acceptance and reset', asy
   await failure(await request(invite(id), 'POST', 'viewer', headers), 403, 'FORBIDDEN');
 });
 
-test('an upgraded database preserves history and rolls back incomplete invitations', async t => {
-  const dir = await mkdtemp(join(tmpdir(), 'staffing-upgrade-'));
+test('a failed write rolls back the whole invitation', async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'staffing-rollback-'));
   t.after(() => rm(dir, { recursive: true, force: true }));
   const file = join(dir, 'shift.db');
-  const old = openStaffing(file);
-  const before = old.invite('manager', 'shift-001', 'worker-002').result.snapshot;
-  old.close();
+  const staffing = openStaffing(file);
   const sqlite = new DatabaseSync(file);
   try {
-    sqlite.exec('DROP TABLE invitation_receipts; PRAGMA user_version = 1');
-    const upgraded = openStaffing(file);
-    try {
-      assert.deepEqual(upgraded.snapshot('shift-001'), before);
-      sqlite.exec("CREATE TRIGGER reject_receipt BEFORE INSERT ON invitation_receipts BEGIN SELECT RAISE(ABORT, 'write failed'); END");
-      assert.throws(() => upgraded.invite('manager', 'shift-001', 'worker-003', 'new-invite'), /write failed/);
-      assert.deepEqual(upgraded.snapshot('shift-001'), before);
-      sqlite.exec('DROP TRIGGER reject_receipt');
-      const invited = upgraded.invite('manager', 'shift-001', 'worker-003', 'new-invite');
-      assert.equal(invited.result.snapshot.activity.length, before.activity.length + 1);
-    } finally {
-      upgraded.close();
-    }
+    const before = staffing.snapshot('shift-001');
+    sqlite.exec("CREATE TRIGGER reject_receipt BEFORE INSERT ON invitation_receipts BEGIN SELECT RAISE(ABORT, 'write failed'); END");
+    assert.throws(() => staffing.invite('manager', 'shift-001', 'worker-003', 'new-invite'), /write failed/);
+    assert.deepEqual(staffing.snapshot('shift-001'), before);
+    sqlite.exec('DROP TRIGGER reject_receipt');
+    const invited = staffing.invite('manager', 'shift-001', 'worker-003', 'new-invite');
+    assert.equal(invited.result.snapshot.activity.length, before.activity.length + 1);
   } finally {
+    staffing.close();
     sqlite.close();
   }
+});
+
+test('a database from an older demo is refused with a clear message', async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'staffing-old-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const file = join(dir, 'shift.db');
+  openStaffing(file).close();
+  const sqlite = new DatabaseSync(file);
+  sqlite.exec('PRAGMA user_version = 1');
+  sqlite.close();
+  assert.throws(() => openStaffing(file), /older version of this demo/);
 });
 
 test('a large shift history and subsequent live update arrive on the same connection', async t => {
