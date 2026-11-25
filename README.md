@@ -36,7 +36,7 @@ The shift requires **3** people. Initially **1** place is filled, **2** remain, 
 ## Try the worker flow
 
 1. In a Manager tab, invite Alex Chen. Leave that tab open.
-2. Open the same URL in a second tab. Choose **Worker** in the role menu and **Alex Chen** in the worker selector.
+2. Open the same URL in a second tab. Choose **Worker** in the role menu and **Alex Chen** in the worker selector beside it.
 3. Choose **Accept shift** or **Decline invitation**. After accepting, you can cancel before checking in and accept again after cancelling.
 4. Choose **Check in**, then **Check out**. Check-out is final. Watch the manager’s roster, counts, and Activity update in the first tab.
 
@@ -44,7 +44,7 @@ The demo keeps the role and worker selection per tab across refreshes. Each work
 
 ## Roster and activity
 
-Overview shows each worker’s latest status. Attendance takes precedence once someone has checked in or out. The API retains the separate participation and attendance fields and the stable IDs. Portraits are fictional and bundled with the app.
+Overview shows the shift’s places as portraits of the accepted workers and open slots. The roster shows each worker’s latest status, with the time of an invitation, check-in or check-out. Attendance takes precedence once someone has checked in or out. A status that changes while the page is open is highlighted briefly, whoever made the change. The API retains the separate participation and attendance fields and the stable IDs. Portraits are fictional and bundled with the app.
 
 Activity shows the shift’s events newest first, grouped by Toronto date. The initial timeline contains Jordan’s invitation, acceptance, and check-in. Maya Patel is the named demo Manager for both dashboard and API invitations. An invitation and its activity entry commit together. A rejected or repeated invitation adds no entry. Reset restores the roster and adds an event to the existing timeline. When upgrading an existing database, older non-seed invitations are attributed to the demo manager role, the identity the old app recorded.
 

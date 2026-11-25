@@ -51,6 +51,7 @@ test('an open viewer dashboard receives an API-issued invitation', async ({ app,
   const alex = row(page, 'Alex Chen');
   await expect(alex.getByText(/^uninvited$/i)).toBeVisible();
   await expect(page.getByRole('button', { name: /^Invite / })).toHaveCount(0);
+  await expect(page.getByRole('columnheader', { name: 'Action' })).toHaveCount(0);
 
   const reply = await request.post(app.url + shiftPath + '/workers/worker-002/invite', {
     headers: managerHeaders,
@@ -99,6 +100,7 @@ test('the roster and activity page show the same committed invitation', async ({
   await openDashboard(page, app.url);
   await expect(page.getByRole('columnheader', { name: 'Status' })).toBeVisible();
   await expect(row(page, 'Jordan Lee')).toContainText('Checked in');
+  await expect(row(page, 'Jordan Lee')).toContainText('Nov 24, 4:55 PM');
   await expect(page.getByText('worker-001', { exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Invite Alex Chen' }).click();
   await expect(row(page, 'Alex Chen')).toContainText('Invited');
@@ -127,6 +129,10 @@ test('worker responds in a separate session while the manager sees each change l
       await worker.getByRole('button', { name: button, exact: true }).click();
       await expect(rosterRow.getByText(status, { exact: true })).toBeVisible();
     }
+    await expect(rosterRow.getByText('Checked out', { exact: true })).toHaveClass(/changed/);
+    await expect(row(page, 'Jordan Lee').getByText('Checked in', { exact: true })).not.toHaveClass(/changed/);
+    await expect(worker.getByText('Shift complete. You’re checked out.')).toBeVisible();
+    await expect(worker.getByRole('listitem').filter({ hasText: 'Check out' })).toContainText('(done)');
     await worker.reload();
     await expect(worker.getByRole('heading', { name: 'Alex Chen' })).toBeVisible();
     await expect(worker.getByText('Checked out', { exact: true })).toBeVisible();
