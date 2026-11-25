@@ -1,4 +1,7 @@
-import type { Assignment, Role, Shift, StaffingCounts, Worker } from '../shared/types.ts'
+import type { Assignment, Role, Shift, StaffingCounts, Worker } from '../../shared/api-types.ts'
+
+// Server-side staffing rules. Which action a worker can take next lives in shared/assignment-rules.ts,
+// because the UI uses it to choose buttons and the workflows use it to enforce transitions.
 
 // Rule violations carry a stable code. The HTTP layer decides which status each code maps to.
 export type StaffingErrorCode =

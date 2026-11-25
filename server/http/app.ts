@@ -2,11 +2,12 @@ import { createHash, timingSafeEqual } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { extname, resolve } from 'node:path'
-import { workerActions, type WorkerAction } from '../shared/worker-actions.ts'
-import type { Role } from '../shared/types.ts'
-import { openStaffing } from './staffing-service.ts'
+import type { Role } from '../../shared/api-types.ts'
+import { StaffingError } from '../domain/rules.ts'
+import { openStaffing } from '../workflows/staffing.ts'
 import { liveDashboard } from './live.ts'
-import { StaffingError, type StaffingErrorCode } from './staffing.ts'
+import { ApiError, json, statusForRule } from './responses.ts'
+import { routes } from './routes.ts'
 
 interface AppOptions {
   databasePath: string
@@ -14,27 +15,6 @@ interface AppOptions {
   now?: () => string
   // A shared password for a public preview. Local runs leave it unset and stay open.
   previewPassword?: string
-}
-
-// Errors that belong to HTTP itself: headers, methods, routes and files.
-class ApiError extends Error {
-  status: number
-  code: string
-
-  constructor(status: number, code: string, message: string) {
-    super(message)
-    this.status = status
-    this.code = code
-  }
-}
-
-const statusForRule: Record<StaffingErrorCode, number> = {
-  FORBIDDEN: 403,
-  SHIFT_NOT_FOUND: 404,
-  WORKER_NOT_FOUND: 404,
-  INVALID_REQUEST_KEY: 400,
-  REQUEST_KEY_REUSED: 409,
-  INVALID_TRANSITION: 409,
 }
 
 function roleFor(request: IncomingMessage): Role {
@@ -53,11 +33,6 @@ function requirePreviewPassword(request: IncomingMessage, response: ServerRespon
     response.setHeader('WWW-Authenticate', 'Basic realm="Tideway preview", charset="UTF-8"')
     throw new ApiError(401, 'UNAUTHORIZED', 'Enter the preview password.')
   }
-}
-
-function json(response: ServerResponse, status: number, value: unknown) {
-  response.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' })
-  response.end(JSON.stringify(value))
 }
 
 function requireMethod(method: string | undefined, expected: string, response: ServerResponse) {
@@ -87,53 +62,18 @@ export function createApp({ databasePath, clientDir = 'dist/client', now, previe
       const path = new URL(request.url ?? '/', 'http://localhost').pathname
       if (path.startsWith('/api/')) {
         const role = roleFor(request)
-        if (path === '/api/shifts') {
-          requireMethod(request.method, 'GET', response)
-          json(response, 200, { shifts: staffing.shifts() })
-          return
-        }
-        const match = /^\/api\/shifts\/([^/]+)(\/events)?$/.exec(path)
-        if (match) {
-          requireMethod(request.method, 'GET', response)
-          // Reading and registering the stream happen synchronously, before another request can commit.
-          const snapshot = staffing.snapshot(match[1]!)
-          if (match[2]) live.subscribe(response, snapshot)
-          else json(response, 200, snapshot)
-          return
-        }
-        const invite = /^\/api\/shifts\/([^/]+)\/workers\/([^/]+)\/invite$/.exec(path)
-        if (invite) {
-          requireMethod(request.method, 'POST', response)
-          const key = request.headers['idempotency-key']
-          if (Array.isArray(key)) throw new ApiError(400, 'INVALID_REQUEST_KEY', 'Supply one Idempotency-Key.')
-          const { changed, result } = staffing.invite(role, invite[1]!, invite[2]!, key)
-          if (changed) live.publish(result.snapshot)
-          json(response, 200, result)
-          return
-        }
-        const action = /^\/api\/shifts\/([^/]+)\/workers\/([^/]+)\/([^/]+)$/.exec(path)
-        if (action && Object.hasOwn(workerActions, action[3]!)) {
-          requireMethod(request.method, 'POST', response)
-          const actor = request.headers['x-demo-worker-id']
-          const key = request.headers['idempotency-key']
-          const result = staffing.workerAction({
-            role,
-            actorId: typeof actor === 'string' ? actor : undefined,
-            shiftId: action[1]!,
-            workerId: action[2]!,
-            action: action[3] as WorkerAction,
-            key: typeof key === 'string' ? key : undefined,
-          })
-          if (result.changed) live.publish(result.snapshot)
-          json(response, 200, result)
-          return
-        }
-        if (path === '/api/demo/reset') {
-          requireMethod(request.method, 'POST', response)
-          const snapshot = staffing.reset(role)
-          // A reset changes every shift. These reads run before any other request can commit.
-          for (const shiftId of live.shifts()) live.publish(staffing.snapshot(shiftId))
-          json(response, 200, snapshot)
+        const candidates = routes.flatMap(route => {
+          const match = route.path.exec(path)
+          return match ? [{ route, params: match.slice(1) }] : []
+        })
+        if (candidates.length) {
+          const match = candidates.find(candidate => candidate.route.method === request.method)
+          if (!match) {
+            const allowed = candidates.map(candidate => candidate.route.method).join(', ')
+            response.setHeader('Allow', allowed)
+            throw new ApiError(405, 'METHOD_NOT_ALLOWED', `Use ${allowed} for this endpoint.`)
+          }
+          await match.route.handle({ request, response, role, params: match.params, staffing, live })
           return
         }
       } else if (path === '/' || /^\/assets\/[a-zA-Z0-9_.-]+$/.test(path) || path === '/favicon.svg') {

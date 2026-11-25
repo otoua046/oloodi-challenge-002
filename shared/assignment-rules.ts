@@ -1,4 +1,4 @@
-import type { Assignment } from './types.ts'
+import type { Assignment } from './api-types.ts'
 
 export const workerActions = {
   accept: { label: 'Accept shift', event: 'accepted' },

@@ -16,4 +16,4 @@ await build({
   define: { 'process.env.NODE_ENV': '"production"' },
 })
 await copyFile('index.html', output + '/index.html')
-await cp('client/portraits', output + '/assets', { recursive: true })
+await cp('client/ui/portraits', output + '/assets', { recursive: true })

@@ -1,8 +1,8 @@
 import { useState } from 'react'
-import type { Assignment, Snapshot, Worker } from '../shared/types'
-import { availableActions, workerActions, type WorkerAction } from '../shared/worker-actions'
-import { Icon } from './Icons'
-import { Portrait } from './Portrait'
+import type { Assignment, Snapshot, Worker } from '../../shared/api-types'
+import { availableActions, workerActions, type WorkerAction } from '../../shared/assignment-rules'
+import { Icon } from '../ui/Icons'
+import { Portrait } from '../ui/Portrait'
 import { WorkerStatus, assignmentState, type WorkerState } from './WorkerStatus'
 import type { useShift } from './useShift'
 

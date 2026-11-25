@@ -947,7 +947,7 @@ select {
   position: absolute;
   inset: 0;
   z-index: 3;
-  background: url(./iphone-bezel.png) center / 100% 100% no-repeat;
+  background: url(./ui/iphone-bezel.png) center / 100% 100% no-repeat;
   pointer-events: none;
 }
 .phone-screen {

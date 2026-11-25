@@ -37,6 +37,50 @@ fly secrets set PREVIEW_PASSWORD='choose-a-long-random-password'
 
 With `PREVIEW_PASSWORD` set, the server asks every visitor for that password and accepts any user name. To reset the preview from your machine, pass the password to the reset command: `APP_URL=https://oloodi-challenge-002.fly.dev PREVIEW_PASSWORD='…' npm run reset`. API callers pass it too, for example `curl -u preview:PASSWORD "$SHIFT"`. Local runs leave it unset and stay open. Keep one Machine with `fly scale count 1`, because each Machine has its own database. The preview returns to the seeded shift whenever its Machine restarts.
 
+## Where things live
+
+Each folder has one job, so the folder tells you where a change belongs.
+
+```text
+server/
+  main.ts               Starts the server from environment variables
+  http/                 HTTP only: requests in, responses out
+    routes.ts           Every API endpoint: method, path and handler
+    app.ts              Server setup, preview password, static files, error responses
+    responses.ts        JSON responses and the HTTP status for each domain error
+    live.ts             Server-sent event streams, one shift per stream
+  workflows/
+    staffing.ts         Each use case as one transaction: list shifts, read a shift, invite, respond, reset
+  domain/
+    rules.ts            Business rules with no HTTP or SQL: permissions, invitations, request keys, counts
+  storage/
+    sqlite.ts           Schema, seed data and every SQL query
+shared/                 Used by both the server and the client
+  api-types.ts          The API contract: Shift, Worker, Assignment, Snapshot and responses
+  assignment-rules.ts   Worker actions and when each one is available
+client/
+  main.tsx              Mounts the app
+  App.tsx               Shell: header, demo role and worker pickers, which screen to show
+  staffing/             Staffing screens and the hook that feeds them
+    useShift.ts         Loads a shift, follows its live stream, sends writes
+    ShiftHeader.tsx     Shift banner, crew places and counts, shown on every screen
+    Roster.tsx          Manager and viewer roster with invite and reset
+    WorkerShift.tsx     A worker's own assignment and actions
+    Activity.tsx        The shift timeline
+    WorkerStatus.tsx    Status badge and labels
+    format.ts           Dates in the shift's time zone
+  ui/                   Presentational pieces with no data fetching or rules: icons, portraits, phone frame
+  style.css
+tests/                  API tests (node:test) and browser tests (Playwright)
+```
+
+Where a change goes:
+
+- **A rule** (who may do what, a new limit): `server/domain/rules.ts`. If the UI needs it too, such as which buttons to show, put it in `shared/assignment-rules.ts`.
+- **An endpoint**: a route in `server/http/routes.ts` that calls a workflow in `server/workflows/`. Request and response types go in `shared/api-types.ts`.
+- **A table or query**: `server/storage/sqlite.ts`. Workflows call its functions and never write SQL themselves.
+- **A screen**: a component in `client/staffing/`, its data from `useShift.ts` or a hook beside it, and a case in `App.tsx`.
+
 ## The data model
 
 The starter models staffing the way a real app would:
@@ -100,7 +144,7 @@ curl -N "$SHIFT/events"
 
 The second command returns 403. The third invites Alex Chen. Repeat it to get the same `invitation` object, including its original UTC timestamp. A repeat does not increment the revision or publish another update. Its accompanying `snapshot` is current and may include intervening changes to other assignments.
 
-The snapshot contains `shift` (ID, title, location, start/end instants, time zone, required workers), `workers` (everyone who can be staffed: stable IDs and full names), `assignments` (this shift’s assignments, one per invited worker), `counts`, the ordered `activity` array, and a numeric `revision`. Activity entries carry a `shiftId`, which is null for demo resets because they apply to every shift. The revision counts changes across all shifts. The invite response wraps it as `{ invitation: { shiftId, workerId, invitedAt }, snapshot }`. See [shared/types.ts](shared/types.ts) for the exact field names, types and status values.
+The snapshot contains `shift` (ID, title, location, start/end instants, time zone, required workers), `workers` (everyone who can be staffed: stable IDs and full names), `assignments` (this shift’s assignments, one per invited worker), `counts`, the ordered `activity` array, and a numeric `revision`. Activity entries carry a `shiftId`, which is null for demo resets because they apply to every shift. The revision counts changes across all shifts. The invite response wraps it as `{ invitation: { shiftId, workerId, invitedAt }, snapshot }`. See [shared/api-types.ts](shared/api-types.ts) for the exact field names, types and status values.
 
 Errors have the shape `{"error":{"code":"FORBIDDEN","message":"This action requires the Manager role."}}`.
 
@@ -121,7 +165,7 @@ Errors have the shape `{"error":{"code":"FORBIDDEN","message":"This action requi
 
 ## Implementation and checks
 
-`shared/worker-actions.ts` defines worker transitions for the UI and server. `server/staffing.ts` holds the staffing rules: permissions, the invitation rule, request keys and counts. Its errors carry a code, and `server/app.ts` maps each code to an HTTP status. The HTTP layer calls `server/staffing-service.ts`, which runs each command in a transaction and records its activity entry. `server/storage/sqlite.ts` creates and seeds the database and holds every SQL query. Its schema has `shifts`, `workers` and `assignments` tables, and the database enforces the assignment rules with constraints. Every actual change increments a persistent revision. `server/app.ts` publishes through `server/live.ts` after commit. Each stream follows one shift and receives only that shift’s snapshots. On a new connection the server registers the stream and sends a current snapshot before it can handle another write. This closes the gap between loading the page and receiving live updates.
+`shared/assignment-rules.ts` defines worker transitions for the UI and server. `server/domain/rules.ts` holds the staffing rules: permissions, the invitation rule, request keys and counts. Its errors carry a code, and `server/http/responses.ts` maps each code to an HTTP status. Each route in `server/http/routes.ts` calls `server/workflows/staffing.ts`, which runs each command in a transaction and records its activity entry. `server/storage/sqlite.ts` creates and seeds the database and holds every SQL query. Its schema has `shifts`, `workers` and `assignments` tables, and the database enforces the assignment rules with constraints. Every actual change increments a persistent revision. Routes publish through `server/http/live.ts` after commit. Each stream follows one shift and receives only that shift’s snapshots. On a new connection the server registers the stream and sends a current snapshot before it can handle another write. This closes the gap between loading the page and receiving live updates.
 
 The dashboard applies the confirmed POST response immediately. Its EventSource reconnects automatically and receives the latest complete snapshot, including changes made during an outage. The client checks revisions so a late response cannot replace newer data. Live delivery assumes one server process per database and writes through its API.
 

@@ -1,5 +1,5 @@
 import type { ServerResponse } from 'node:http'
-import type { Snapshot } from '../shared/types.ts'
+import type { Snapshot } from '../../shared/api-types.ts'
 
 export function liveDashboard() {
   // Each stream follows one shift. A blocked stream needs only that shift's newest snapshot when it drains.

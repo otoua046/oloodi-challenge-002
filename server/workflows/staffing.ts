@@ -1,6 +1,6 @@
-import { availableActions, workerActions, type WorkerAction } from '../shared/worker-actions.ts'
-import { demoManager, demoShiftId } from '../shared/types.ts'
-import type { InviteResponse, Role, Shift, ShiftSummary, Snapshot } from '../shared/types.ts'
+import { availableActions, workerActions, type WorkerAction } from '../../shared/assignment-rules.ts'
+import { demoManager, demoShiftId } from '../../shared/api-types.ts'
+import type { InviteResponse, Role, Shift, ShiftSummary, Snapshot } from '../../shared/api-types.ts'
 import {
   StaffingError,
   invitationTime,
@@ -10,8 +10,8 @@ import {
   requireShift,
   requireWorker,
   staffingCounts,
-} from './staffing.ts'
-import { openShiftDatabase } from './storage/sqlite.ts'
+} from '../domain/rules.ts'
+import { openShiftDatabase } from '../storage/sqlite.ts'
 
 interface WorkerCommand {
   role: Role
