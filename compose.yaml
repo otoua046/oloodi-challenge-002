@@ -1,0 +1,10 @@
+services:
+  staffing:
+    build: .
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - staffing-data:/app/data
+
+volumes:
+  staffing-data:
