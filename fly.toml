@@ -1,19 +1,22 @@
-# Fly.io settings for the public preview. Candidates build and run the app locally (see README).
-# Run exactly one Machine: each Machine would get its own SQLite database and its own live stream.
-# Fly starts two on the first deploy, so scale down afterwards with `fly scale count 1`.
-# The disk is ephemeral, so the preview returns to the seeded shift whenever its Machine restarts.
+# fly.toml app configuration file generated for oloodi-challenge-002 on 2026-11-25T19:58:14Z
+#
+# See https://docs.fly.io/reference/configuration for information about how to use this file.
+#
+
+app = 'oloodi-challenge-002'
+primary_region = 'ams'
 
 [build]
-  dockerfile = "Dockerfile"
+  dockerfile = 'Dockerfile'
 
 [http_service]
-  # The Dockerfile sets HOST=0.0.0.0 and PORT=3000.
-  internal_port = 3000
+  internal_port = 8080
   force_https = true
-  auto_stop_machines = "stop"
+  auto_stop_machines = 'stop'
   auto_start_machines = true
   min_machines_running = 0
 
 [[vm]]
-  memory = "256mb"
+  memory = '256mb'
+  cpu_kind = 'shared'
   cpus = 1
