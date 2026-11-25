@@ -55,7 +55,10 @@ export function useShift() {
   }
 
   function invite(workerId: string, role: Role) {
-    return write(workerId, 'invite', { 'X-Demo-Role': role })
+    if (!snapshot) throw new Error('Wait for the roster to load.')
+    return write(workerId, 'invite', {
+      'X-Demo-Role': role, 'Idempotency-Key': workerId + '/invite/' + snapshot.revision,
+    })
   }
 
   function respond(workerId: string, action: WorkerAction, revision: number) {

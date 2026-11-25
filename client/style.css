@@ -96,7 +96,7 @@ tr > :last-child { padding-right: 26px; }
 /* A single fade, no movement, so it also runs under reduced motion. */
 .badge.changed::after { content: ""; position: absolute; inset: -4px; border: 2px solid currentColor; border-radius: 99px; opacity: 0; animation: status-changed 1.8s ease-out; }
 @keyframes status-changed { from { opacity: .6; } }
-.status-time { display: block; margin: 5px 0 0 2px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.attendance-time { display: block; margin: 5px 0 0 2px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .badge.checked_in, .badge.accepted { color: #1f5d43; background: #e2f1e2; }
 .badge.uninvited { color: #56645e; background: #eef1ed; }
 .badge.invited { color: #7d5417; background: #fbefd2; }

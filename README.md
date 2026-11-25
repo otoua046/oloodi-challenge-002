@@ -50,7 +50,7 @@ Activity shows the shift’s events newest first, grouped by Toronto date. The i
 
 ## Integration contract
 
-The local role selector starts on Manager. API callers select a demo identity using `X-Demo-Role: manager`, `X-Demo-Role: viewer`, or `X-Demo-Role: worker`. Omitting the header selects Viewer. The header is a public local fixture. An integration should pass its current caller’s role from application state. The server checks permission on every write.
+The local role selector starts on Manager. API callers select a demo identity using `X-Demo-Role: manager`, `X-Demo-Role: viewer`, or `X-Demo-Role: worker`. Omitting the header selects Viewer. The role and worker headers are public demo selectors. All demo roles can read the shared shift snapshot. A deployed multi-user service would need server-authenticated identities and an explicit read-access policy. An integration should pass its current caller’s role from application state. The server checks permission on every write.
 
 | Method | Path | Success response |
 | --- | --- | --- |
@@ -60,7 +60,7 @@ The local role selector starts on Manager. API callers select a demo identity us
 | GET | `/api/shifts/:shiftId/events` | SSE stream of named `snapshot` events |
 | POST | `/api/demo/reset` | Manager only. Restores the seed and returns its new snapshot |
 
-All JSON endpoints return HTTP 200 on success. POST endpoints take an empty body. Worker actions require the worker role, a matching `X-Demo-Worker-Id`, and an `Idempotency-Key` (1–128 characters). Reuse the key when retrying the same action and use a fresh key for a new decision. The stable IDs in the path identify the target.
+All JSON endpoints return HTTP 200 on success. POST endpoints take an empty body. Worker actions require the worker role, a matching `X-Demo-Worker-Id`, and an `Idempotency-Key` (1–128 characters). Reuse the key when retrying the same action and use a fresh key for a new decision. Manager invitations also support an optional `Idempotency-Key`. A retry with the same key returns the original receipt and the current roster, even after the worker responds or the demo resets. Use a new key for a fresh invitation after a reset. The stable IDs in the path identify the target.
 
 ```sh
 BASE=http://127.0.0.1:3000
@@ -94,7 +94,7 @@ Errors have the shape `{"error":{"code":"FORBIDDEN","message":"This action requi
 
 ## Implementation and checks
 
-`server/staffing.ts` owns the rules and counts. `server/database.ts` checks and records an invitation within a SQLite write transaction. Every actual change increments a persistent revision. `server/app.ts` publishes through `server/live.ts` after commit. On a new connection the server registers the stream and sends a current snapshot before it can handle another write. This closes the gap between loading the page and receiving live updates.
+`shared/worker-actions.ts` defines worker transitions for the UI and server. `server/staffing.ts` defines the invitation rules and counts. The HTTP layer calls `server/staffing-service.ts`, which owns each command’s transaction, receipt, and activity entry. `server/storage/sqlite.ts` opens and migrates the database. The schema belongs to this single-shift demo. Every actual change increments a persistent revision. `server/app.ts` publishes through `server/live.ts` after commit. On a new connection the server registers the stream and sends a current snapshot before it can handle another write. This closes the gap between loading the page and receiving live updates.
 
 The dashboard applies the confirmed POST response immediately. Its EventSource reconnects automatically and receives the latest complete snapshot, including changes made during an outage. The client checks revisions so a late response cannot replace newer data. Live delivery assumes one server process per database and writes through its API.
 

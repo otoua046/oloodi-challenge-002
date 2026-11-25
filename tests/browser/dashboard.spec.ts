@@ -142,3 +142,18 @@ test('worker responds in a separate session while the manager sees each change l
     await session.close();
   }
 });
+
+test('activity uses the affected worker portrait, falls back to initials, and distinguishes resets', async ({ app, page, request }) => {
+  await page.route('**/assets/alex-chen.jpg', route => route.abort());
+  await request.post(app.url + shiftPath + '/workers/worker-002/invite', { headers: managerHeaders });
+  await request.post(app.url + '/api/demo/reset', { headers: managerHeaders });
+  await page.setViewportSize({ width: 375, height: 800 });
+  await openDashboard(page, app.url + '/#activity');
+  const jordan = page.getByRole('listitem').filter({ hasText: 'Jordan Lee checked in' });
+  await expect.poll(() => jordan.locator('img').evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0);
+  await expect(jordan.locator('img')).toHaveAttribute('src', '/assets/jordan.jpg');
+  const alex = page.getByRole('listitem').filter({ hasText: 'Maya Patel invited Alex Chen' });
+  await expect(alex.getByText('AC', { exact: true })).toBeVisible();
+  await expect(page.getByRole('listitem').filter({ hasText: 'restored the demo roster' }).locator('img')).toHaveCount(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});

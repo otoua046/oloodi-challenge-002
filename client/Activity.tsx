@@ -28,8 +28,9 @@ export function Activity({ events, shift }: { events: ActivityEvent[]; shift: Sh
   const days = new Map<string, ActivityEvent[]>()
   for (const event of events) {
     const day = date.format(new Date(event.occurredAt))
-    if (!days.has(day)) days.set(day, [])
-    days.get(day)!.push(event)
+    const entries = days.get(day)
+    if (entries) entries.push(event)
+    else days.set(day, [event])
   }
   return <section className="panel activity" aria-labelledby="activity-title">
     <div className="panel-heading"><h2 id="activity-title">Shift activity</h2><span>Newest first</span></div>
@@ -37,7 +38,7 @@ export function Activity({ events, shift }: { events: ActivityEvent[]; shift: Sh
       <h3>{day}</h3>
       <ol>{entries.map(event => <li key={event.id} className={event.id > seen ? 'new' : undefined}>
         <span className="event-mark">
-          {event.workerId && event.workerName && <Portrait worker={{ id: event.workerId, name: event.workerName }} />}
+          {event.workerId && event.workerName && <Portrait id={event.workerId} name={event.workerName} />}
           <span className={'event-icon ' + event.kind}><Icon name={icons[event.kind]} size={16} /></span>
         </span>
         <span className="event-description"><Description event={event} /></span>
