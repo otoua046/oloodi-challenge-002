@@ -1,3 +1,4 @@
+import { createHash, timingSafeEqual } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { extname, resolve } from 'node:path'
@@ -11,12 +12,27 @@ interface AppOptions {
   databasePath: string
   clientDir?: string
   now?: () => string
+  // A shared password for a public preview. Local runs leave it unset and stay open.
+  previewPassword?: string
 }
 
 function roleFor(request: IncomingMessage): Role {
   const role = request.headers['x-demo-role'] ?? 'viewer'
   if (role === 'viewer' || role === 'manager' || role === 'worker') return role
   throw new ApiError(400, 'INVALID_ROLE', 'X-Demo-Role must be viewer, manager, or worker.')
+}
+
+// Any user name is accepted. Comparing digests keeps the check constant-time whatever the input length.
+function requirePreviewPassword(request: IncomingMessage, response: ServerResponse, password: string) {
+  const [scheme, encoded] = (request.headers.authorization ?? '').split(' ')
+  const supplied = scheme === 'Basic' && encoded
+    ? Buffer.from(encoded, 'base64').toString().split(':').slice(1).join(':')
+    : ''
+  const digest = (value: string) => createHash('sha256').update(value).digest()
+  if (!timingSafeEqual(digest(supplied), digest(password))) {
+    response.setHeader('WWW-Authenticate', 'Basic realm="Tideway preview", charset="UTF-8"')
+    throw new ApiError(401, 'UNAUTHORIZED', 'Enter the preview password.')
+  }
 }
 
 function json(response: ServerResponse, status: number, value: unknown) {
@@ -41,12 +57,13 @@ const mediaTypes: Record<string, string> = {
   '.png': 'image/png',
 }
 
-export function createApp({ databasePath, clientDir = 'dist/client', now }: AppOptions) {
+export function createApp({ databasePath, clientDir = 'dist/client', now, previewPassword }: AppOptions) {
   const staffing = openStaffing(databasePath, now)
   const live = liveDashboard()
 
   const server = createServer(async (request, response) => {
     try {
+      if (previewPassword) requirePreviewPassword(request, response, previewPassword)
       const path = new URL(request.url ?? '/', 'http://localhost').pathname
       if (path.startsWith('/api/')) {
         const role = roleFor(request)
