@@ -2,6 +2,7 @@
 #
 # See https://docs.fly.io/reference/configuration for information about how to use this file.
 #
+# Run exactly one Machine: each Machine has its own SQLite database and live stream (fly scale count 1).
 
 app = 'oloodi-challenge-002'
 primary_region = 'ams'
@@ -10,7 +11,8 @@ primary_region = 'ams'
   dockerfile = 'Dockerfile'
 
 [http_service]
-  internal_port = 8080
+  # The Dockerfile sets HOST=0.0.0.0 and PORT=3000.
+  internal_port = 3000
   force_https = true
   auto_stop_machines = 'stop'
   auto_start_machines = true
