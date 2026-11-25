@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { InviteResponse, Role, Snapshot } from '../shared/types'
+import type { WorkerAction } from '../shared/worker-actions'
+import type { Role, Snapshot } from '../shared/types'
 
 const endpoint = '/api/shifts/shift-001'
 type Connection = 'Connecting' | 'Live' | 'Reconnecting'
@@ -41,18 +42,28 @@ export function useShift() {
     }
   }, [applySnapshot])
 
-  async function invite(workerId: string, role: Role) {
-    const response = await fetch(endpoint + '/workers/' + encodeURIComponent(workerId) + '/invite', {
-      method: 'POST',
-      headers: { 'X-Demo-Role': role },
+  async function write(workerId: string, action: string, headers: Record<string, string>) {
+    const response = await fetch(endpoint + '/workers/' + encodeURIComponent(workerId) + '/' + action, {
+      method: 'POST', headers,
     })
     if (!response.ok) {
       const problem = await response.json().catch(() => null)
-      throw new Error(problem?.error?.message ?? 'Invitation could not be confirmed. Try again.')
+      throw new Error(problem?.error?.message ?? 'Could not confirm the change. Try again.')
     }
-    const result = (await response.json()) as InviteResponse
+    const result = await response.json() as { snapshot: Snapshot }
     applySnapshot(result.snapshot)
   }
 
-  return { snapshot, invite, connection, loadError }
+  function invite(workerId: string, role: Role) {
+    return write(workerId, 'invite', { 'X-Demo-Role': role })
+  }
+
+  function respond(workerId: string, action: WorkerAction, revision: number) {
+    return write(workerId, action, {
+      'X-Demo-Role': 'worker', 'X-Demo-Worker-Id': workerId,
+      'Idempotency-Key': workerId + '/' + action + '/' + revision,
+    })
+  }
+
+  return { snapshot, invite, respond, connection, loadError }
 }

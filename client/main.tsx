@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import type { Role, Snapshot, Worker } from '../shared/types'
 import { Icon, VenuePlan, type IconName } from './Icons'
 import { Activity } from './Activity'
+import { availableActions, workerActions, type WorkerAction } from '../shared/worker-actions'
 import { demoManager } from '../shared/types'
 import { useShift } from './useShift'
 import './style.css'
@@ -75,7 +76,7 @@ function Metrics({ snapshot }: { snapshot: Snapshot }) {
   )
 }
 
-const participationLabels = { uninvited: 'Uninvited', invited: 'Invited', accepted: 'Accepted' } as const
+const participationLabels = { uninvited: 'Uninvited', invited: 'Invited', accepted: 'Accepted', declined: 'Declined', cancelled: 'Cancelled' } as const
 
 const portraits: Record<string, string> = {
   'worker-001': 'jordan', 'worker-002': 'alex-chen', 'worker-003': 'alex-rivera',
@@ -187,9 +188,54 @@ function Roster({
   )
 }
 
+function WorkerShift({ worker, snapshot, respond }: {
+  worker: Worker
+  snapshot: Snapshot
+  respond: ReturnType<typeof useShift>['respond']
+}) {
+  const [pending, setPending] = useState(false)
+  const [error, setError] = useState('')
+  const actions = availableActions(worker)
+  async function perform(action: WorkerAction) {
+    setPending(true)
+    setError('')
+    try {
+      await respond(worker.id, action, snapshot.revision)
+    } catch (cause) {
+      setError(cause instanceof TypeError ? 'Could not confirm the change. Check your status and retry.' :
+        cause instanceof Error ? cause.message : 'Could not confirm the change.')
+    } finally {
+      setPending(false)
+    }
+  }
+  return <section className="panel worker-shift" aria-label="My assignment">
+    <div className="panel-heading">
+      <div className="identity"><Portrait worker={worker} /><h2>{worker.name}</h2></div>
+      <div aria-live="polite"><Status worker={worker} /></div>
+    </div>
+    {worker.participation === 'uninvited' && <p className="viewer-note">You haven’t received an invitation for this shift.</p>}
+    {actions.length > 0 && <div className="worker-actions">
+      {actions.map(action => <button key={action} disabled={pending} className="invite" onClick={() => void perform(action)}>
+        {workerActions[action].label}
+      </button>)}
+    </div>}
+    {error && <p role="alert" className="feedback error">{error}</p>}
+  </section>
+}
+
 function App() {
-  const { snapshot, connection, loadError, invite } = useShift()
-  const [role, setRole] = useState<Role>('manager')
+  const { snapshot, connection, loadError, invite, respond } = useShift()
+  const [role, setRole] = useState<Role>(() => {
+    const saved = sessionStorage.getItem('demo-role')
+    return saved === 'viewer' || saved === 'worker' ? saved : 'manager'
+  })
+  const [workerId, setWorkerId] = useState(() => sessionStorage.getItem('demo-worker') ?? '')
+  const worker = snapshot?.workers.find(person => person.id === workerId) ?? snapshot?.workers[0]
+  function selectRole(next: Role) {
+    sessionStorage.setItem('demo-role', next)
+    setRole(next)
+    if (next === 'worker') window.location.hash = 'overview'
+  }
 
   const [activityOpen, setActivityOpen] = useState(() => window.location.hash === '#activity')
   useEffect(() => {
@@ -221,10 +267,11 @@ function App() {
               <select
                 id="demo-role"
                 value={role}
-                onChange={(event) => setRole(event.target.value as Role)}
+                onChange={(event) => selectRole(event.target.value as Role)}
               >
                 <option value="manager">Manager</option>
                 <option value="viewer">Viewer</option>
+                <option value="worker">Worker</option>
               </select>
               <Icon name="down" size={13} />
             </div>
@@ -233,7 +280,7 @@ function App() {
       </header>
       <main>
         <div className="screen-heading">
-          <p>{activityOpen ? 'Shift history' : 'Staffing dashboard'}</p>
+          <p>{activityOpen ? 'Shift history' : role === 'worker' ? 'My shift' : 'Staffing dashboard'}</p>
           <span
             role="status"
             aria-label={'Live updates: ' + connection}
@@ -245,8 +292,19 @@ function App() {
         </div>
         {snapshot ? (
           <>
+            {role === 'worker' && worker && <label className="worker-picker">
+              Select worker
+              <select value={worker.id} onChange={event => {
+                sessionStorage.setItem('demo-worker', event.target.value)
+                setWorkerId(event.target.value)
+              }}>
+                {snapshot.workers.map(person => <option value={person.id} key={person.id}>{person.name}</option>)}
+              </select>
+            </label>}
             <ShiftHeader shift={snapshot.shift} />
-            {activityOpen ? <Activity events={snapshot.activity} shift={snapshot.shift} /> : <>
+            {activityOpen ? <Activity events={role === 'worker' ? snapshot.activity.filter(event => event.workerId === worker?.id) : snapshot.activity} shift={snapshot.shift} /> : role === 'worker' && worker ? (
+              <WorkerShift key={worker.id} worker={worker} snapshot={snapshot} respond={respond} />
+            ) : <>
               <Metrics snapshot={snapshot} />
               <Roster snapshot={snapshot} role={role} invite={invite} />
             </>}

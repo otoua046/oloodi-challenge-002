@@ -133,3 +133,11 @@ tr > :last-child { padding-right: 25px; }
   .invite svg { display: none; }
   .worker-total svg { display: none; }
 }
+.worker-shift { margin-top: 18px; }
+.worker-picker, .worker-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.worker-picker { margin-bottom: 16px; color: var(--muted); font-size: 14px; }
+.worker-picker select { appearance: auto; padding: 8px 12px; }
+.worker-actions { padding: 0 25px 20px; }
+.worker-actions .invite { margin: 0; min-height: 40px; }
+.worker-actions .invite:first-child { background: var(--green); color: white; }
+.badge.cancelled, .badge.declined { color: #79493a; background: #f7ebe5; }

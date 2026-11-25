@@ -111,3 +111,28 @@ test('the roster and activity page show the same committed invitation', async ({
   await page.getByRole('link', { name: 'Overview', exact: true }).click();
   await expect(row(page, 'Alex Chen')).toContainText('Invited');
 });
+
+test('worker responds in a separate session while the manager sees each change live', async ({ app, page, browser }) => {
+  await openDashboard(page, app.url);
+  const session = await browser.newContext();
+  try {
+    const worker = await session.newPage();
+    await openDashboard(worker, app.url);
+    await worker.getByLabel('Demo role').selectOption('worker');
+    await worker.getByLabel('Select worker').selectOption({ label: 'Alex Chen' });
+    await page.getByRole('button', { name: 'Invite Alex Chen' }).click();
+    const rosterRow = row(page, 'Alex Chen');
+    for (const [button, status] of [['Accept shift', 'Accepted'], ['Cancel shift', 'Cancelled'],
+      ['Accept shift', 'Accepted'], ['Check in', 'Checked in'], ['Check out', 'Checked out']] as const) {
+      await worker.getByRole('button', { name: button, exact: true }).click();
+      await expect(rosterRow.getByText(status, { exact: true })).toBeVisible();
+    }
+    await worker.reload();
+    await expect(worker.getByRole('heading', { name: 'Alex Chen' })).toBeVisible();
+    await expect(worker.getByText('Checked out', { exact: true })).toBeVisible();
+    await page.getByRole('link', { name: 'Activity' }).click();
+    await expect(page.getByText('Alex Chen checked out', { exact: true })).toBeVisible();
+  } finally {
+    await session.close();
+  }
+});

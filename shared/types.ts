@@ -1,4 +1,4 @@
-export type Role = 'manager' | 'viewer'
+export type Role = 'manager' | 'viewer' | 'worker'
 
 export interface Shift {
   id: string
@@ -13,7 +13,7 @@ export interface Shift {
 export interface Worker {
   id: string
   name: string
-  participation: 'uninvited' | 'invited' | 'accepted'
+  participation: 'uninvited' | 'invited' | 'accepted' | 'declined' | 'cancelled'
   attendance: 'not_started' | 'checked_in' | 'checked_out'
   invitedAt: string | null
   checkedInAt: string | null
@@ -22,7 +22,7 @@ export interface Worker {
 
 export interface ActivityEvent {
   id: number
-  kind: 'invited' | 'accepted' | 'checked_in' | 'checked_out' | 'reset'
+  kind: 'invited' | 'accepted' | 'declined' | 'cancelled' | 'checked_in' | 'checked_out' | 'reset'
   actor: string
   workerId: string | null
   workerName: string | null
