@@ -1,7 +1,9 @@
 import { availableActions, workerActions, type WorkerAction } from '../shared/worker-actions.ts'
 import { demoManager } from '../shared/types.ts'
 import type { ActivityEvent, InviteResponse, Role, Snapshot, Worker } from '../shared/types.ts'
-import { ApiError, invitationTime, requireManager, requireShift, shift, staffingCounts } from './staffing.ts'
+import {
+  StaffingError, invitationTime, requireActingWorker, requireManager, requireRequestKey, requireShift, shift, staffingCounts,
+} from './staffing.ts'
 import { openShiftDatabase, seedRoster } from './storage/sqlite.ts'
 
 interface WorkerCommand {
@@ -26,7 +28,7 @@ export function openStaffing(databasePath: string, now: () => string = () => new
 
   function requireWorker(workerId: string): Worker {
     const worker = findWorker.get(workerId) as unknown as Worker | undefined
-    if (!worker) throw new ApiError(404, 'WORKER_NOT_FOUND', 'Worker not found on this shift.')
+    if (!worker) throw new StaffingError('WORKER_NOT_FOUND', 'Worker not found on this shift.')
     return worker
   }
 
@@ -46,14 +48,12 @@ export function openStaffing(databasePath: string, now: () => string = () => new
   function invite(role: Role, shiftId: string, workerId: string, key?: string) {
     requireManager(role)
     requireShift(shiftId)
-    if (key !== undefined && (!key || key.length > 128)) {
-      throw new ApiError(400, 'INVALID_REQUEST_KEY', 'Supply an Idempotency-Key of up to 128 characters.')
-    }
+    if (key !== undefined) requireRequestKey(key)
     return transaction('write', () => {
       if (key) {
         const receipt = db.prepare('SELECT workerId, invitedAt FROM invitation_receipts WHERE requestKey = ?').get(key)
         if (receipt) {
-          if (receipt.workerId !== workerId) throw new ApiError(409, 'REQUEST_KEY_REUSED', 'This key identifies a different invitation.')
+          if (receipt.workerId !== workerId) throw new StaffingError('REQUEST_KEY_REUSED', 'This key identifies a different invitation.')
           const invitation = { shiftId, workerId, invitedAt: String(receipt.invitedAt) }
           return { changed: false, result: { invitation, snapshot: readSnapshot(shiftId) } }
         }
@@ -72,21 +72,19 @@ export function openStaffing(databasePath: string, now: () => string = () => new
   }
 
   function workerAction({ role, actorId, shiftId, workerId, action, key }: WorkerCommand) {
-    if (role !== 'worker' || actorId !== workerId) {
-      throw new ApiError(403, 'FORBIDDEN', 'Select this worker to change their shift.')
-    }
+    requireActingWorker(role, actorId, workerId)
     requireShift(shiftId)
-    if (!key || key.length > 128) throw new ApiError(400, 'INVALID_REQUEST_KEY', 'Supply an Idempotency-Key of up to 128 characters.')
+    requireRequestKey(key)
     return transaction('write', () => {
       const worker = requireWorker(workerId)
       const kind = workerActions[action].event
       const prior = db.prepare('SELECT kind FROM activity WHERE workerId = ? AND requestKey = ?').get(workerId, key)
       if (prior) {
-        if (prior.kind !== kind) throw new ApiError(409, 'REQUEST_KEY_REUSED', 'This request key already identifies another action.')
+        if (prior.kind !== kind) throw new StaffingError('REQUEST_KEY_REUSED', 'This request key already identifies another action.')
         return { changed: false, snapshot: readSnapshot(shiftId) }
       }
       if (!availableActions(worker).includes(action)) {
-        throw new ApiError(409, 'INVALID_TRANSITION', 'This action is unavailable for the current shift status.')
+        throw new StaffingError('INVALID_TRANSITION', 'This action is unavailable for the current shift status.')
       }
       const at = now()
       if (kind === 'checked_in') {

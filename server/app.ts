@@ -6,7 +6,7 @@ import { workerActions, type WorkerAction } from '../shared/worker-actions.ts'
 import type { Role } from '../shared/types.ts'
 import { openStaffing } from './staffing-service.ts'
 import { liveDashboard } from './live.ts'
-import { ApiError } from './staffing.ts'
+import { StaffingError, type StaffingErrorCode } from './staffing.ts'
 
 interface AppOptions {
   databasePath: string
@@ -14,6 +14,27 @@ interface AppOptions {
   now?: () => string
   // A shared password for a public preview. Local runs leave it unset and stay open.
   previewPassword?: string
+}
+
+// Errors that belong to HTTP itself: headers, methods, routes and files.
+class ApiError extends Error {
+  status: number
+  code: string
+
+  constructor(status: number, code: string, message: string) {
+    super(message)
+    this.status = status
+    this.code = code
+  }
+}
+
+const statusForRule: Record<StaffingErrorCode, number> = {
+  FORBIDDEN: 403,
+  SHIFT_NOT_FOUND: 404,
+  WORKER_NOT_FOUND: 404,
+  INVALID_REQUEST_KEY: 400,
+  REQUEST_KEY_REUSED: 409,
+  INVALID_TRANSITION: 409,
 }
 
 function roleFor(request: IncomingMessage): Role {
@@ -127,8 +148,9 @@ export function createApp({ databasePath, clientDir = 'dist/client', now, previe
       }
       throw new ApiError(404, 'NOT_FOUND', 'Endpoint not found.')
     } catch (error) {
-      if (error instanceof ApiError) {
-        json(response, error.status, { error: { code: error.code, message: error.message } })
+      if (error instanceof ApiError || error instanceof StaffingError) {
+        const status = error instanceof ApiError ? error.status : statusForRule[error.code]
+        json(response, status, { error: { code: error.code, message: error.message } })
       } else {
         console.error(error)
         json(response, 500, { error: { code: 'INTERNAL_ERROR', message: 'An unexpected server error occurred.' } })

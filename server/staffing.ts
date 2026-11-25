@@ -10,32 +10,52 @@ export const shift: Shift = {
   requiredWorkers: 3,
 }
 
-export class ApiError extends Error {
-  status: number
-  code: string
+// Rule violations carry a stable code. The HTTP layer decides which status each code maps to.
+export type StaffingErrorCode =
+  | 'FORBIDDEN'
+  | 'SHIFT_NOT_FOUND'
+  | 'WORKER_NOT_FOUND'
+  | 'INVALID_REQUEST_KEY'
+  | 'REQUEST_KEY_REUSED'
+  | 'INVALID_TRANSITION'
 
-  constructor(status: number, code: string, message: string) {
+export class StaffingError extends Error {
+  code: StaffingErrorCode
+
+  constructor(code: StaffingErrorCode, message: string) {
     super(message)
-    this.status = status
     this.code = code
   }
 }
 
 export function requireManager(role: Role) {
   if (role !== 'manager') {
-    throw new ApiError(403, 'FORBIDDEN', 'This action requires the Manager role.')
+    throw new StaffingError('FORBIDDEN', 'This action requires the Manager role.')
+  }
+}
+
+// Only the selected worker can change their own assignment.
+export function requireActingWorker(role: Role, actorId: string | undefined, workerId: string) {
+  if (role !== 'worker' || actorId !== workerId) {
+    throw new StaffingError('FORBIDDEN', 'Select this worker to change their shift.')
   }
 }
 
 export function requireShift(id: string) {
-  if (id !== shift.id) throw new ApiError(404, 'SHIFT_NOT_FOUND', 'Shift not found.')
+  if (id !== shift.id) throw new StaffingError('SHIFT_NOT_FOUND', 'Shift not found.')
+}
+
+export function requireRequestKey(key: string | undefined): asserts key is string {
+  if (!key || key.length > 128) {
+    throw new StaffingError('INVALID_REQUEST_KEY', 'Supply an Idempotency-Key of up to 128 characters.')
+  }
 }
 
 // A retry returns the recorded invitation. Inviting an accepted worker is an illegal transition.
 export function invitationTime(worker: Worker, now: () => string): string {
   if (worker.participation === 'invited' && worker.invitedAt) return worker.invitedAt
   if (worker.participation !== 'uninvited') {
-    throw new ApiError(409, 'INVALID_TRANSITION', 'Only an uninvited worker can receive a new invitation.')
+    throw new StaffingError('INVALID_TRANSITION', 'Only an uninvited worker can receive a new invitation.')
   }
   return now()
 }
