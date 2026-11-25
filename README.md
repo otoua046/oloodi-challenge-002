@@ -69,7 +69,7 @@ client/
     Activity.tsx        The shift timeline
     WorkerStatus.tsx    Status badge and labels
     format.ts           Dates in the shift's time zone
-  ui/                   Presentational pieces with no staffing logic: icons, portraits, phone frame
+  ui/                   Presentational pieces with no data fetching or rules: icons, portraits, phone frame
   style.css
 tests/                  API tests (node:test) and browser tests (Playwright)
 ```

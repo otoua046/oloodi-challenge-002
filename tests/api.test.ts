@@ -10,6 +10,7 @@ import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { test, type TestContext } from 'node:test'
 import { createApp } from '../server/http/app.ts'
+import { routes } from '../server/http/routes.ts'
 import type { InviteResponse, ShiftSummary, Snapshot } from '../shared/api-types.ts'
 
 const shift = '/api/shifts/shift-001'
@@ -488,4 +489,23 @@ test('a worker has an independent assignment, history and live stream on each sh
   )
   await failure(await app.request('/api/shifts', 'POST', 'manager'), 405, 'METHOD_NOT_ALLOWED')
   await failure(await app.request('/api/shifts', 'GET', 'owner'), 400, 'INVALID_ROLE')
+})
+
+test('an async route that throws returns a JSON 500 and the server keeps serving', async t => {
+  // Candidates add endpoints to the route table, and an assistant endpoint will usually be async.
+  const route = {
+    method: 'GET' as const,
+    path: /^\/api\/test-async-failure$/,
+    async handle() {
+      await Promise.resolve()
+      throw new Error('model call failed')
+    },
+  }
+  routes.push(route)
+  t.after(() => routes.splice(routes.indexOf(route), 1))
+  const request = await fixture(t)
+  const logged = t.mock.method(console, 'error', () => {})
+  await failure(await request('/api/test-async-failure'), 500, 'INTERNAL_ERROR')
+  assert.equal(logged.mock.callCount(), 1)
+  await success(await request(shift))
 })

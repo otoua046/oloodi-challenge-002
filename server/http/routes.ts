@@ -18,7 +18,8 @@ export interface RouteContext {
 export interface Route {
   method: 'GET' | 'POST'
   path: RegExp
-  handle(context: RouteContext): void
+  // May be async, for example to call a model. app.ts awaits it, so a thrown error still becomes a JSON 500.
+  handle(context: RouteContext): void | Promise<void>
 }
 
 const id = '([^/]+)'

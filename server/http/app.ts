@@ -73,7 +73,7 @@ export function createApp({ databasePath, clientDir = 'dist/client', now, previe
             response.setHeader('Allow', allowed)
             throw new ApiError(405, 'METHOD_NOT_ALLOWED', `Use ${allowed} for this endpoint.`)
           }
-          match.route.handle({ request, response, role, params: match.params, staffing, live })
+          await match.route.handle({ request, response, role, params: match.params, staffing, live })
           return
         }
       } else if (path === '/' || /^\/assets\/[a-zA-Z0-9_.-]+$/.test(path) || path === '/favicon.svg') {
