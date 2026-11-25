@@ -1,44 +1,62 @@
 import { useState } from 'react'
 import type { Role, Snapshot, Worker } from '../shared/types'
-import { Icon, VenuePlan, type IconName } from './Icons'
+import { Icon, VenuePlan } from './Icons'
 import { Portrait } from './Portrait'
-import { WorkerStatus } from './WorkerStatus'
+import { WorkerStatus, statusLabels, workerState } from './WorkerStatus'
 
 function formatDate(date: string, timeZone: string, options: Intl.DateTimeFormatOptions) {
   return new Intl.DateTimeFormat('en-US', { timeZone, ...options }).format(new Date(date))
 }
 
-export function ShiftHeader({ shift }: { shift: Snapshot['shift'] }) {
+export function ShiftHeader({ snapshot, connection, detailed }: { snapshot: Snapshot; connection: string; detailed: boolean }) {
+  const { shift, workers } = snapshot
   const { startsAt, endsAt, timeZone } = shift
   const dateOptions = { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' } as const
   const day = formatDate(startsAt, timeZone, dateOptions)
   const lastDay = formatDate(endsAt, timeZone, dateOptions)
   const time = { hour: 'numeric', minute: '2-digit' } as const
+  // Accepted workers hold a place throughout attendance. The rest of the places are open.
+  const crew = workers.filter(worker => worker.participation === 'accepted')
   return (
     <section className="shift-header" aria-labelledby="shift-title">
       <VenuePlan />
-      <div className="shift-content">
-        <div className="eyebrow">
-          <span />
-          Shift overview
-        </div>
-        <h1 id="shift-title">{shift.title}</h1>
-        <div className="shift-details">
-          <span>
-            <Icon name="calendar" />
-            {day}
-            {day !== lastDay && ' – ' + lastDay}
-          </span>
-          <span>
-            <Icon name="clock" />
-            {formatDate(startsAt, timeZone, time)} –{' '}
-            {formatDate(endsAt, timeZone, { ...time, timeZoneName: 'short' })}
-          </span>
-          <span>
-            <Icon name="pin" />
-            {shift.location}
+      <div className="wrap shift-content">
+        <div className="shift-top">
+          <div className="shift-details">
+            <span>
+              <Icon name="calendar" />
+              {day}
+              {day !== lastDay && ' – ' + lastDay}
+            </span>
+            <span>
+              <Icon name="clock" />
+              {formatDate(startsAt, timeZone, time)} –{' '}
+              {formatDate(endsAt, timeZone, { ...time, timeZoneName: 'short' })}
+            </span>
+          </div>
+          <span role="status" aria-label={'Live updates: ' + connection} className={'connection ' + connection.toLowerCase()}>
+            <i />
+            {connection}
           </span>
         </div>
+        <div className="shift-main">
+          <div>
+            <h1 id="shift-title">{shift.title}</h1>
+            <p className="shift-place">
+              <Icon name="pin" />
+              {shift.location}
+            </p>
+          </div>
+          {detailed && <ul className="crew" aria-label="Crew places">
+            {Array.from({ length: shift.requiredWorkers }, (_, index) => {
+              const worker = crew[index]
+              return worker
+                ? <li key={worker.id} className={worker.attendance} style={{ animationDelay: 120 + index * 90 + 'ms' }}><Portrait id={worker.id} name={worker.name} />{worker.name}<small>{statusLabels[workerState(worker)]}</small></li>
+                : <li key={index} className="open" style={{ animationDelay: 120 + index * 90 + 'ms' }}><span className="avatar"><Icon name="open" size={22} /></span>Open</li>
+            })}
+          </ul>}
+        </div>
+        {detailed && <Metrics snapshot={snapshot} />}
       </div>
     </section>
   )
@@ -46,24 +64,18 @@ export function ShiftHeader({ shift }: { shift: Snapshot['shift'] }) {
 
 export function Metrics({ snapshot }: { snapshot: Snapshot }) {
   const { counts, shift } = snapshot
-  const metrics: { label: string; value: number; icon: IconName; tone: string }[] = [
-    { label: 'Filled spots', value: counts.filled, icon: 'people', tone: 'purple' },
-    { label: 'Open spots', value: counts.remaining, icon: 'open', tone: 'amber' },
-    { label: 'Checked in', value: counts.checkedIn, icon: 'checkIn', tone: 'green' },
-    { label: 'Checked out', value: counts.checkedOut, icon: 'checkOut', tone: 'slate' },
-  ]
+  const metrics = [
+    ['Filled spots', counts.filled], ['Open spots', counts.remaining],
+    ['Checked in', counts.checkedIn], ['Checked out', counts.checkedOut],
+  ] as const
   return (
     <dl className="metrics" aria-label="Shift staffing counts">
-      {metrics.map((metric, index) => (
-        <div className="metric" key={metric.label}>
-          <dt>
-            <span className={'metric-icon ' + metric.tone}>
-              <Icon name={metric.icon} />
-            </span>
-            {metric.label}
-          </dt>
+      {metrics.map(([label, value], index) => (
+        <div className="metric" key={label}>
+          <dt>{label}</dt>
           <dd>
-            {metric.value}
+            {/* Keyed by value so a changed count replays its entrance. */}
+            <span key={value} className="count">{value}</span>
             {index === 0 && <small> / {shift.requiredWorkers}</small>}
           </dd>
         </div>
@@ -101,6 +113,7 @@ export function Roster({
       setPending((ids) => ids.filter((id) => id !== worker.id))
     }
   }
+  const canInvite = role === 'manager'
   return (
     <section className="panel roster" aria-labelledby="roster-title">
       <div className="panel-heading">
@@ -118,9 +131,7 @@ export function Roster({
           <tr>
             <th scope="col">Worker</th>
             <th scope="col">Status</th>
-            <th scope="col" className="action-cell">
-              Action
-            </th>
+            {canInvite && <th scope="col" className="action-cell">Action</th>}
           </tr>
         </thead>
         <tbody>
@@ -134,14 +145,14 @@ export function Roster({
               </th>
               <td>
                 <WorkerStatus worker={worker} />
-                {[['In', worker.checkedInAt], ['Out', worker.checkedOutAt]].map(([label, at]) => at &&
+                {[['Invited', worker.participation === 'invited' ? worker.invitedAt : null], ['In', worker.checkedInAt], ['Out', worker.checkedOutAt]].map(([label, at]) => at &&
                   <small className="attendance-time" key={label}>{label} <time dateTime={at}>
                     {formatDate(at, snapshot.shift.timeZone, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })}
                   </time></small>
                 )}
               </td>
-              <td className="action-cell">
-                {role === 'manager' && worker.participation === 'uninvited' ? (
+              {canInvite && <td className="action-cell">
+                {worker.participation === 'uninvited' ? (
                   <button
                     type="button"
                     className="invite"
@@ -157,7 +168,7 @@ export function Roster({
                     —
                   </span>
                 )}
-              </td>
+              </td>}
             </tr>
           ))}
         </tbody>

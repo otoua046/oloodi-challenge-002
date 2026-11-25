@@ -11,6 +11,8 @@ await build({
   jsx: 'automatic',
   target: 'es2022',
   minify: true,
+  // The phone bezel is referenced from style.css and emitted next to app.css.
+  loader: { '.png': 'file' },
   define: { 'process.env.NODE_ENV': '"production"' },
 })
 await copyFile('index.html', output + '/index.html')

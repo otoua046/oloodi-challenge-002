@@ -11,6 +11,8 @@ const paths = {
   invite: <><path d="m21 3-5.8 17-4.1-7.2L3 9.4 21 3Zm0 0-9.9 9.8" /></>,
   shield: <><path d="m12 3 7.5 3v5c0 4.3-3.1 7.8-7.5 10-4.4-2.2-7.5-5.7-7.5-10V6L12 3Z" /><path d="m9 11.5 2 2 4-4" /></>,
   down: <path d="m7 10 5 5 5-5" />,
+  check: <path d="m5 12.5 4.5 4.5L19 7.5" />,
+  x: <path d="m6.5 6.5 11 11m0-11-11 11" />,
 } satisfies Record<string, ReactNode>
 
 export type IconName = keyof typeof paths

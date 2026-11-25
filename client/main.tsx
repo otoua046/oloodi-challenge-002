@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import type { Role } from '../shared/types'
 import { Icon } from './Icons'
-import { ShiftHeader, Metrics, Roster } from './ShiftOverview'
+import { ShiftHeader, Roster } from './ShiftOverview'
 import { WorkerShift } from './WorkerShift'
 import { Activity } from './Activity'
+import { Portrait } from './Portrait'
+import { PhoneFrame } from './PhoneFrame'
 import { demoManager } from '../shared/types'
 import { useShift } from './useShift'
 import './style.css'
@@ -39,17 +41,22 @@ function App() {
     if (role === 'worker') {
       return worker && <WorkerShift key={worker.id} worker={worker} snapshot={snapshot} respond={respond} />
     }
-    return <><Metrics snapshot={snapshot} /><Roster snapshot={snapshot} role={role} invite={invite} /></>
+    return <Roster snapshot={snapshot} role={role} invite={invite} />
   }
 
+  const page = snapshot && <>
+    <ShiftHeader snapshot={snapshot} connection={connection} detailed={!activityOpen && role !== 'worker'} />
+    <div className="wrap content">{renderPage()}</div>
+  </>
+
   return (
-    <>
+    <div className="app">
       <header className="app-header">
         <div className="header-inner">
           <a className="brand" href="#overview" aria-label="Tideway Staffing overview">
             <svg viewBox="0 0 32 32" width="38" height="38" aria-hidden="true">
-              <rect width="32" height="32" rx="8" fill="#12574f" />
-              <path d="M5 12q5-5 11 0t11 0M5 17q5-5 11 0t11 0M5 22q5-5 11 0t11 0" fill="none" stroke="#d9eba8" strokeWidth="2.3" />
+              <rect width="32" height="32" rx="8" fill="#d9eba8" />
+              <path d="M5 12q5-5 11 0t11 0M5 17q5-5 11 0t11 0M5 22q5-5 11 0t11 0" fill="none" stroke="#12574f" strokeWidth="2.3" />
             </svg>
             <span><b>Tideway</b><small>Staffing</small></span>
           </a>
@@ -59,7 +66,18 @@ function App() {
           </nav>
           <div className="role-control">
             <label htmlFor="demo-role" className="sr-only">Demo role</label>
+            <span className="acting-as">Acting as</span>
             {role === 'manager' && <span className="manager-name">{demoManager}</span>}
+            {role === 'worker' && snapshot && worker && <div className="role-select">
+              <Portrait id={worker.id} name={worker.name} />
+              <select aria-label="Select worker" value={worker.id} onChange={event => {
+                sessionStorage.setItem('demo-worker', event.target.value)
+                setWorkerId(event.target.value)
+              }}>
+                {snapshot.workers.map(person => <option value={person.id} key={person.id}>{person.name}</option>)}
+              </select>
+              <Icon name="down" size={13} />
+            </div>}
             <div className="role-select">
               <Icon name="shield" size={15} />
               <select
@@ -77,40 +95,17 @@ function App() {
         </div>
       </header>
       <main>
-        <div className="screen-heading">
-          <p>{activityOpen ? 'Shift history' : role === 'worker' ? 'My shift' : 'Staffing dashboard'}</p>
-          <span
-            role="status"
-            aria-label={'Live updates: ' + connection}
-            className={'connection ' + connection.toLowerCase()}
-          >
-            <i />
-            {connection}
-          </span>
-        </div>
-        {snapshot ? (
-          <>
-            {role === 'worker' && worker && <label className="worker-picker">
-              Select worker
-              <select value={worker.id} onChange={event => {
-                sessionStorage.setItem('demo-worker', event.target.value)
-                setWorkerId(event.target.value)
-              }}>
-                {snapshot.workers.map(person => <option value={person.id} key={person.id}>{person.name}</option>)}
-              </select>
-            </label>}
-            <ShiftHeader shift={snapshot.shift} />
-            {renderPage()}
-          </>
+        {page ? (
+          role === 'worker' ? <PhoneFrame>{page}</PhoneFrame> : page
         ) : (
-          <p className="loading-panel" role="status">
+          <p className="wrap loading-panel" role="status">
             {loadError || connection === 'Reconnecting'
               ? 'Waiting for the server. The dashboard will reconnect automatically.'
               : 'Loading shift…'}
           </p>
         )}
       </main>
-    </>
+    </div>
   )
 }
 
