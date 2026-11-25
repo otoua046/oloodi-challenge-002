@@ -2,8 +2,8 @@ import type { ServerResponse } from 'node:http'
 import type { Snapshot } from '../shared/types.ts'
 
 export function liveDashboard() {
-  // A blocked stream needs only the newest complete snapshot when it drains.
-  const clients = new Map<ServerResponse, string | null>()
+  // Each stream follows one shift. A blocked stream needs only that shift's newest snapshot when it drains.
+  const clients = new Map<ServerResponse, { shiftId: string; pending: string | null }>()
 
   function event(snapshot: Snapshot) {
     return `event: snapshot\ndata: ${JSON.stringify(snapshot)}\n\n`
@@ -22,12 +22,12 @@ export function liveDashboard() {
         'Cache-Control': 'no-cache, no-transform',
         'X-Accel-Buffering': 'no',
       })
-      clients.set(client, null)
+      const stream = { shiftId: snapshot.shift.id, pending: null as string | null }
+      clients.set(client, stream)
       const drain = () => {
-        const pending = clients.get(client)
-        if (pending) {
-          clients.set(client, null)
-          client.write(pending)
+        if (stream.pending) {
+          client.write(stream.pending)
+          stream.pending = null
         }
       }
       client.on('drain', drain)
@@ -39,10 +39,15 @@ export function liveDashboard() {
     },
     publish(snapshot: Snapshot) {
       const chunk = event(snapshot)
-      for (const client of clients.keys()) {
-        if (client.writableNeedDrain) clients.set(client, chunk)
+      for (const [client, stream] of clients) {
+        if (stream.shiftId !== snapshot.shift.id) continue
+        if (client.writableNeedDrain) stream.pending = chunk
         else client.write(chunk)
       }
+    },
+    // Shifts with at least one open stream.
+    shifts() {
+      return new Set([...clients.values()].map(stream => stream.shiftId))
     },
     close() {
       clearInterval(heartbeat)

@@ -40,7 +40,12 @@ function App() {
       return <Activity events={events} shift={snapshot.shift} />
     }
     if (role === 'worker') {
-      return worker && <WorkerShift key={worker.id} worker={worker} snapshot={snapshot} respond={respond} />
+      const assignment = snapshot.assignments.find(item => item.workerId === worker?.id)
+      return (
+        worker && (
+          <WorkerShift key={worker.id} worker={worker} assignment={assignment} snapshot={snapshot} respond={respond} />
+        )
+      )
     }
     return <Roster snapshot={snapshot} role={role} invite={invite} reset={reset} />
   }

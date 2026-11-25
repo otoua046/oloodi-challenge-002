@@ -87,6 +87,11 @@ export function createApp({ databasePath, clientDir = 'dist/client', now, previe
       const path = new URL(request.url ?? '/', 'http://localhost').pathname
       if (path.startsWith('/api/')) {
         const role = roleFor(request)
+        if (path === '/api/shifts') {
+          requireMethod(request.method, 'GET', response)
+          json(response, 200, { shifts: staffing.shifts() })
+          return
+        }
         const match = /^\/api\/shifts\/([^/]+)(\/events)?$/.exec(path)
         if (match) {
           requireMethod(request.method, 'GET', response)
@@ -126,7 +131,8 @@ export function createApp({ databasePath, clientDir = 'dist/client', now, previe
         if (path === '/api/demo/reset') {
           requireMethod(request.method, 'POST', response)
           const snapshot = staffing.reset(role)
-          live.publish(snapshot)
+          // A reset changes every shift. These reads run before any other request can commit.
+          for (const shiftId of live.shifts()) live.publish(staffing.snapshot(shiftId))
           json(response, 200, snapshot)
           return
         }

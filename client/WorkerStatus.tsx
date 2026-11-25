@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { Worker } from '../shared/types'
+import type { Assignment } from '../shared/types'
 
 export const statusLabels = {
   uninvited: 'Uninvited',
@@ -12,13 +12,14 @@ export const statusLabels = {
 } as const
 export type WorkerState = keyof typeof statusLabels
 
-// Attendance takes precedence once someone has checked in or out.
-export function workerState(worker: Worker): WorkerState {
-  return worker.attendance === 'not_started' ? worker.participation : worker.attendance
+// A worker without an assignment on the shift is uninvited. Attendance takes precedence once someone checks in.
+export function assignmentState(assignment: Assignment | undefined): WorkerState {
+  if (!assignment) return 'uninvited'
+  return assignment.attendance === 'not_started' ? assignment.participation : assignment.attendance
 }
 
-export function WorkerStatus({ worker }: { worker: Worker }) {
-  const state = workerState(worker)
+export function WorkerStatus({ assignment }: { assignment: Assignment | undefined }) {
+  const state = assignmentState(assignment)
   // The badge remounts on every later change so its highlight replays. The first render stays quiet.
   const [initial] = useState(state)
   const [changed, setChanged] = useState(false)

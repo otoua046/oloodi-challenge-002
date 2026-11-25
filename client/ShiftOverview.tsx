@@ -2,7 +2,7 @@ import { useState } from 'react'
 import type { Role, Snapshot, Worker } from '../shared/types'
 import { Icon, VenuePlan } from './Icons'
 import { Portrait } from './Portrait'
-import { WorkerStatus, statusLabels, workerState } from './WorkerStatus'
+import { WorkerStatus, assignmentState, statusLabels } from './WorkerStatus'
 
 function formatDate(date: string, timeZone: string, options: Intl.DateTimeFormatOptions) {
   return new Intl.DateTimeFormat('en-US', { timeZone, ...options }).format(new Date(date))
@@ -17,14 +17,15 @@ export function ShiftHeader({
   connection: string
   detailed: boolean
 }) {
-  const { shift, workers } = snapshot
+  const { shift, workers, assignments } = snapshot
   const { startsAt, endsAt, timeZone } = shift
   const dateOptions = { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' } as const
   const day = formatDate(startsAt, timeZone, dateOptions)
   const lastDay = formatDate(endsAt, timeZone, dateOptions)
   const time = { hour: 'numeric', minute: '2-digit' } as const
-  // Accepted workers hold a place throughout attendance. The rest of the places are open.
-  const crew = workers.filter(worker => worker.participation === 'accepted')
+  // Accepted assignments hold a place throughout attendance. The rest of the places are open.
+  const crew = assignments.filter(assignment => assignment.participation === 'accepted')
+  const names = new Map(workers.map(worker => [worker.id, worker.name]))
   return (
     <section className="shift-header" aria-labelledby="shift-title">
       <VenuePlan />
@@ -62,12 +63,17 @@ export function ShiftHeader({
           {detailed && (
             <ul className="crew" aria-label="Crew places">
               {Array.from({ length: shift.requiredWorkers }, (_, index) => {
-                const worker = crew[index]
-                return worker ? (
-                  <li key={worker.id} className={worker.attendance} style={{ animationDelay: 120 + index * 90 + 'ms' }}>
-                    <Portrait id={worker.id} name={worker.name} />
-                    {worker.name}
-                    <small>{statusLabels[workerState(worker)]}</small>
+                const assignment = crew[index]
+                const name = assignment ? (names.get(assignment.workerId) ?? '') : ''
+                return assignment ? (
+                  <li
+                    key={assignment.workerId}
+                    className={assignment.attendance}
+                    style={{ animationDelay: 120 + index * 90 + 'ms' }}
+                  >
+                    <Portrait id={assignment.workerId} name={name} />
+                    {name}
+                    <small>{statusLabels[assignmentState(assignment)]}</small>
                   </li>
                 ) : (
                   <li key={index} className="open" style={{ animationDelay: 120 + index * 90 + 'ms' }}>
@@ -168,6 +174,7 @@ export function Roster({
     }
   }
   const canInvite = role === 'manager'
+  const assignments = new Map(snapshot.assignments.map(assignment => [assignment.workerId, assignment]))
   return (
     <section className="panel roster" aria-labelledby="roster-title">
       <div className="panel-heading">
@@ -201,60 +208,63 @@ export function Roster({
           </tr>
         </thead>
         <tbody>
-          {snapshot.workers.map(worker => (
-            <tr key={worker.id}>
-              <th scope="row" className="identity-cell">
-                <div className="identity">
-                  <Portrait id={worker.id} name={worker.name} />
-                  <span className="worker-name">{worker.name}</span>
-                </div>
-              </th>
-              <td>
-                <WorkerStatus worker={worker} />
-                {[
-                  ['Invited', worker.participation === 'invited' ? worker.invitedAt : null],
-                  ['In', worker.checkedInAt],
-                  ['Out', worker.checkedOutAt],
-                ].map(
-                  ([label, at]) =>
-                    at && (
-                      <small className="attendance-time" key={label}>
-                        {label}{' '}
-                        <time dateTime={at}>
-                          {formatDate(at, snapshot.shift.timeZone, {
-                            month: 'short',
-                            day: 'numeric',
-                            hour: 'numeric',
-                            minute: '2-digit',
-                            timeZoneName: 'short',
-                          })}
-                        </time>
-                      </small>
-                    ),
-                )}
-              </td>
-              {canInvite && (
-                <td className="action-cell">
-                  {worker.participation === 'uninvited' ? (
-                    <button
-                      type="button"
-                      className="invite"
-                      disabled={pending.includes(worker.id)}
-                      aria-label={'Invite ' + worker.name}
-                      onClick={() => void sendInvite(worker)}
-                    >
-                      <Icon name="invite" size={14} />
-                      {pending.includes(worker.id) ? 'Sending…' : 'Invite'}
-                    </button>
-                  ) : (
-                    <span className="no-action" aria-label="No available action">
-                      —
-                    </span>
+          {snapshot.workers.map(worker => {
+            const assignment = assignments.get(worker.id)
+            return (
+              <tr key={worker.id}>
+                <th scope="row" className="identity-cell">
+                  <div className="identity">
+                    <Portrait id={worker.id} name={worker.name} />
+                    <span className="worker-name">{worker.name}</span>
+                  </div>
+                </th>
+                <td>
+                  <WorkerStatus assignment={assignment} />
+                  {[
+                    ['Invited', assignment?.participation === 'invited' ? assignment.invitedAt : null],
+                    ['In', assignment?.checkedInAt],
+                    ['Out', assignment?.checkedOutAt],
+                  ].map(
+                    ([label, at]) =>
+                      at && (
+                        <small className="attendance-time" key={label}>
+                          {label}{' '}
+                          <time dateTime={at}>
+                            {formatDate(at, snapshot.shift.timeZone, {
+                              month: 'short',
+                              day: 'numeric',
+                              hour: 'numeric',
+                              minute: '2-digit',
+                              timeZoneName: 'short',
+                            })}
+                          </time>
+                        </small>
+                      ),
                   )}
                 </td>
-              )}
-            </tr>
-          ))}
+                {canInvite && (
+                  <td className="action-cell">
+                    {!assignment ? (
+                      <button
+                        type="button"
+                        className="invite"
+                        disabled={pending.includes(worker.id)}
+                        aria-label={'Invite ' + worker.name}
+                        onClick={() => void sendInvite(worker)}
+                      >
+                        <Icon name="invite" size={14} />
+                        {pending.includes(worker.id) ? 'Sending…' : 'Invite'}
+                      </button>
+                    ) : (
+                      <span className="no-action" aria-label="No available action">
+                        —
+                      </span>
+                    )}
+                  </td>
+                )}
+              </tr>
+            )
+          })}
         </tbody>
       </table>
       <div aria-live="polite" aria-atomic="true">

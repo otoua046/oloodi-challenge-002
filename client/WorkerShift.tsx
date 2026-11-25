@@ -1,9 +1,9 @@
 import { useState } from 'react'
-import type { Snapshot, Worker } from '../shared/types'
+import type { Assignment, Snapshot, Worker } from '../shared/types'
 import { availableActions, workerActions, type WorkerAction } from '../shared/worker-actions'
 import { Icon } from './Icons'
 import { Portrait } from './Portrait'
-import { WorkerStatus, workerState, type WorkerState } from './WorkerStatus'
+import { WorkerStatus, assignmentState, type WorkerState } from './WorkerStatus'
 import type { useShift } from './useShift'
 
 const steps = ['Invite', 'Accept', 'Check in', 'Check out']
@@ -28,17 +28,19 @@ const guidance: Record<WorkerState, string> = {
 
 export function WorkerShift({
   worker,
+  assignment,
   snapshot,
   respond,
 }: {
   worker: Worker
+  assignment: Assignment | undefined
   snapshot: Snapshot
   respond: ReturnType<typeof useShift>['respond']
 }) {
   const [pending, setPending] = useState(false)
   const [error, setError] = useState('')
-  const actions = availableActions(worker)
-  const state = workerState(worker)
+  const actions = availableActions(assignment)
+  const state = assignmentState(assignment)
   const done = completedSteps[state]
   async function perform(action: WorkerAction) {
     setPending(true)
@@ -65,7 +67,7 @@ export function WorkerShift({
           <h2>{worker.name}</h2>
         </div>
         <div aria-live="polite">
-          <WorkerStatus worker={worker} />
+          <WorkerStatus assignment={assignment} />
         </div>
       </div>
       <ol className="steps" aria-label="Shift progress">
