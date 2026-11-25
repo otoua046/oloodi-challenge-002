@@ -1,9 +1,6 @@
 import type { ActivityEvent, Shift } from '../shared/types'
-import { Icon, type IconName } from './Icons'
-
-const icons: Record<ActivityEvent['kind'], IconName> = {
-  invited: 'invite', accepted: 'people', declined: 'people', cancelled: 'people', checked_in: 'checkIn', checked_out: 'checkOut', reset: 'clock',
-}
+import { Icon } from './Icons'
+import { Portrait } from './Portrait'
 
 function Description({ event }: { event: ActivityEvent }) {
   switch (event.kind) {
@@ -24,15 +21,18 @@ export function Activity({ events, shift }: { events: ActivityEvent[]; shift: Sh
   const days = new Map<string, ActivityEvent[]>()
   for (const event of events) {
     const day = date.format(new Date(event.occurredAt))
-    if (!days.has(day)) days.set(day, [])
-    days.get(day)!.push(event)
+    const entries = days.get(day)
+    if (entries) entries.push(event)
+    else days.set(day, [event])
   }
   return <section className="panel activity" aria-labelledby="activity-title">
     <div className="panel-heading"><h2 id="activity-title">Shift activity</h2><span>Newest first</span></div>
     {[...days].map(([day, entries]) => <section key={day} className="day">
       <h3>{day}</h3>
       <ol>{entries.map(event => <li key={event.id}>
-        <span className={'event-icon ' + event.kind}><Icon name={icons[event.kind]} size={16} /></span>
+        {event.workerId && event.workerName
+          ? <Portrait id={event.workerId} name={event.workerName} />
+          : <span className="event-icon"><Icon name="clock" size={16} /></span>}
         <span className="event-description"><Description event={event} /></span>
         <time dateTime={event.occurredAt}>{time.format(new Date(event.occurredAt))}</time>
       </li>)}</ol>

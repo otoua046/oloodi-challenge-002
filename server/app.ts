@@ -3,7 +3,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { extname, resolve } from 'node:path'
 import { workerActions, type WorkerAction } from '../shared/worker-actions.ts'
 import type { Role } from '../shared/types.ts'
-import { openStaffing } from './database.ts'
+import { openStaffing } from './staffing-service.ts'
 import { liveDashboard } from './live.ts'
 import { ApiError } from './staffing.ts'
 
@@ -62,7 +62,9 @@ export function createApp({ databasePath, clientDir = 'dist/client', now }: AppO
         const invite = /^\/api\/shifts\/([^/]+)\/workers\/([^/]+)\/invite$/.exec(path)
         if (invite) {
           requireMethod(request.method, 'POST', response)
-          const { changed, result } = staffing.invite(role, invite[1]!, invite[2]!)
+          const key = request.headers['idempotency-key']
+          if (Array.isArray(key)) throw new ApiError(400, 'INVALID_REQUEST_KEY', 'Supply one Idempotency-Key.')
+          const { changed, result } = staffing.invite(role, invite[1]!, invite[2]!, key)
           if (changed) live.publish(result.snapshot)
           json(response, 200, result)
           return
@@ -72,8 +74,14 @@ export function createApp({ databasePath, clientDir = 'dist/client', now }: AppO
           requireMethod(request.method, 'POST', response)
           const actor = request.headers['x-demo-worker-id']
           const key = request.headers['idempotency-key']
-          const result = staffing.workerAction(role, typeof actor === 'string' ? actor : undefined, action[1]!, action[2]!,
-            action[3] as WorkerAction, typeof key === 'string' ? key : undefined)
+          const result = staffing.workerAction({
+            role,
+            actorId: typeof actor === 'string' ? actor : undefined,
+            shiftId: action[1]!,
+            workerId: action[2]!,
+            action: action[3] as WorkerAction,
+            key: typeof key === 'string' ? key : undefined,
+          })
           if (result.changed) live.publish(result.snapshot)
           json(response, 200, result)
           return

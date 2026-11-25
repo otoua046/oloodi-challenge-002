@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
+import { DatabaseSync } from 'node:sqlite';
+import { openStaffing } from '../server/staffing-service.ts';
 import { mkdtemp, rm } from 'node:fs/promises';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -22,9 +24,9 @@ async function start(databasePath = ':memory:', now?: () => string) {
     throw error;
   }
   const { port } = server.address() as AddressInfo;
-  function request(path: string, method = 'GET', role?: string, headers: Record<string, string> = {}) {
+  function request(path: string, method = 'GET', role?: string, headers: Record<string, string> = {}, signal?: AbortSignal) {
     return fetch(`http://127.0.0.1:${port}${path}`, {
-      method,
+      method, signal,
       headers: role === undefined ? headers : { ...headers, 'X-Demo-Role': role },
     });
   }
@@ -195,4 +197,88 @@ test('worker decisions enforce identity, preserve retries, and update counts and
   assert.equal(declined.snapshot.workers.find(w => w.id === id)?.participation, 'declined');
   assert.equal(declined.snapshot.counts.filled, 1);
   await failure(await action('check-in', 'g'), 409, 'INVALID_TRANSITION');
+});
+
+test('a keyed manager invitation can be retried after acceptance and reset', async t => {
+  const request = await fixture(t);
+  const id = 'worker-002';
+  const headers = { 'Idempotency-Key': 'first-invite' };
+  const send = () => request(invite(id), 'POST', 'manager', headers);
+  const original = await success<InviteResponse>(await send());
+  const accepted = await success<{ snapshot: Snapshot }>(await request(shift + '/workers/' + id + '/accept',
+    'POST', 'worker', { 'X-Demo-Worker-Id': id, 'Idempotency-Key': 'accepted' }));
+  assert.deepEqual(await success(await send()), { invitation: original.invitation, snapshot: accepted.snapshot });
+  const restored = await success<Snapshot>(await request(reset, 'POST', 'manager'));
+  assert.deepEqual(await success(await send()), { invitation: original.invitation, snapshot: restored });
+  await failure(await request(invite('worker-003'), 'POST', 'manager', headers), 409, 'REQUEST_KEY_REUSED');
+  await failure(await request(invite(id), 'POST', 'viewer', headers), 403, 'FORBIDDEN');
+});
+
+test('an upgraded database preserves history and rolls back incomplete invitations', async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'staffing-upgrade-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const file = join(dir, 'shift.db');
+  const old = openStaffing(file);
+  const before = old.invite('manager', 'shift-001', 'worker-002').result.snapshot;
+  old.close();
+  const sqlite = new DatabaseSync(file);
+  try {
+    sqlite.exec('DROP TABLE invitation_receipts; PRAGMA user_version = 1');
+    const upgraded = openStaffing(file);
+    try {
+      assert.deepEqual(upgraded.snapshot('shift-001'), before);
+      sqlite.exec("CREATE TRIGGER reject_receipt BEFORE INSERT ON invitation_receipts BEGIN SELECT RAISE(ABORT, 'write failed'); END");
+      assert.throws(() => upgraded.invite('manager', 'shift-001', 'worker-003', 'new-invite'), /write failed/);
+      assert.deepEqual(upgraded.snapshot('shift-001'), before);
+      sqlite.exec('DROP TRIGGER reject_receipt');
+      const invited = upgraded.invite('manager', 'shift-001', 'worker-003', 'new-invite');
+      assert.equal(invited.result.snapshot.activity.length, before.activity.length + 1);
+    } finally {
+      upgraded.close();
+    }
+  } finally {
+    sqlite.close();
+  }
+});
+
+test('a large shift history and subsequent live update arrive on the same connection', async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'staffing-stream-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const file = join(dir, 'shift.db');
+  openStaffing(file).close();
+  const db = new DatabaseSync(file);
+  try {
+    db.exec(`WITH RECURSIVE n(i) AS (VALUES(1) UNION ALL SELECT i+1 FROM n WHERE i<1800)
+      INSERT INTO activity(kind,actor,occurredAt)
+      SELECT 'reset','Demo manager','2026-11-22T12:00:00.000Z' FROM n`);
+  } finally {
+    db.close();
+  }
+  const app = await start(file);
+  const abort = new AbortController();
+  try {
+    const response = await app.request(shift + '/events', 'GET', undefined, {}, AbortSignal.any([abort.signal, AbortSignal.timeout(8000)]));
+    const reader = response.body!.pipeThrough(new TextDecoderStream()).getReader();
+    let buffered = '';
+    async function nextSnapshot(): Promise<Snapshot> {
+      while (!buffered.includes('\n\n')) {
+        const part = await reader.read();
+        assert.ok(!part.done, 'stream closed before delivering a snapshot');
+        buffered += part.value;
+      }
+      const end = buffered.indexOf('\n\n');
+      const frame = buffered.slice(0, end);
+      buffered = buffered.slice(end + 2);
+      const data = frame.split('\n').find(line => line.startsWith('data: '));
+      assert.ok(data);
+      return JSON.parse(data.slice(6));
+    }
+    const initial = await nextSnapshot();
+    assert.equal(initial.activity.length, 1803);
+    const reply = await success<InviteResponse>(await app.request(invite('worker-002'), 'POST', 'manager'));
+    assert.deepEqual(await nextSnapshot(), reply.snapshot);
+  } finally {
+    abort.abort();
+    await app.close();
+  }
 });

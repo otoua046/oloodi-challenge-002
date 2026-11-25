@@ -52,11 +52,11 @@ h1 { font: 500 clamp(36px, 4.5vw, 62px)/1.05 Georgia, "Times New Roman", serif; 
 .metric { padding: 0 24px; }
 .metric + .metric { border-left: 1px solid var(--line); }
 .metric dt { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); font-weight: 550; }
-.metric-icon, .event-icon { width: 26px; height: 26px; border-radius: 8px; display: inline-grid; place-items: center; }
-.purple, .event-icon.invited { background: #e5f1e8; color: #24694e; }
+.metric-icon { width: 26px; height: 26px; border-radius: 8px; display: inline-grid; place-items: center; }
+.purple { background: #e5f1e8; color: #24694e; }
 .amber { background: #fcf1da; color: #8c6325; }
-.green, .event-icon.checked_in, .event-icon.accepted { background: #e5efdb; color: #486926; }
-.slate, .event-icon.checked_out, .event-icon.reset { background: #e9edf0; color: #516677; }
+.green { background: #e5efdb; color: #486926; }
+.slate, .event-icon { background: #e9edf0; color: #516677; }
 .metric dd { margin: 10px 0 0; font-size: 33px; font-weight: 590; letter-spacing: -1.5px; }
 .metric dd small { font-size: 16px; font-weight: 400; color: var(--muted); }
 .panel { overflow: hidden; }
@@ -96,7 +96,9 @@ tr > :last-child { padding-right: 25px; }
 .day ol { margin: 0; padding: 0 25px; list-style: none; }
 .day li { display: grid; grid-template-columns: 32px 1fr auto; gap: 12px; align-items: center; padding: 14px 0; }
 .day li + li { border-top: 1px solid #ebeee8; }
-.event-icon { width: 32px; height: 32px; }
+.event-icon { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; }
+.day .avatar { width: 32px; height: 32px; }
+.attendance-time { display: block; margin-top: 4px; font-size: 11px; color: var(--muted); }
 .event-description { font-size: 14px; line-height: 1.5; }
 .event-description strong { font-weight: 620; }
 .day time { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
