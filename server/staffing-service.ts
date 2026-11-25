@@ -2,7 +2,14 @@ import { availableActions, workerActions, type WorkerAction } from '../shared/wo
 import { demoManager } from '../shared/types.ts'
 import type { InviteResponse, Role, Snapshot, Worker } from '../shared/types.ts'
 import {
-  StaffingError, invitationTime, requireActingWorker, requireManager, requireRequestKey, requireShift, shift, staffingCounts,
+  StaffingError,
+  invitationTime,
+  requireActingWorker,
+  requireManager,
+  requireRequestKey,
+  requireShift,
+  shift,
+  staffingCounts,
 } from './staffing.ts'
 import { openShiftDatabase } from './storage/sqlite.ts'
 
@@ -46,7 +53,8 @@ export function openStaffing(databasePath: string, now: () => string = () => new
       if (key) {
         const receipt = store.invitationReceipt(key)
         if (receipt) {
-          if (receipt.workerId !== workerId) throw new StaffingError('REQUEST_KEY_REUSED', 'This key identifies a different invitation.')
+          if (receipt.workerId !== workerId)
+            throw new StaffingError('REQUEST_KEY_REUSED', 'This key identifies a different invitation.')
           const invitation = { shiftId, workerId, invitedAt: receipt.invitedAt }
           return { changed: false, result: { invitation, snapshot: readSnapshot(shiftId) } }
         }
@@ -73,7 +81,8 @@ export function openStaffing(databasePath: string, now: () => string = () => new
       const kind = workerActions[action].event
       const prior = store.eventKindForKey(workerId, key)
       if (prior) {
-        if (prior !== kind) throw new StaffingError('REQUEST_KEY_REUSED', 'This request key already identifies another action.')
+        if (prior !== kind)
+          throw new StaffingError('REQUEST_KEY_REUSED', 'This request key already identifies another action.')
         return { changed: false, snapshot: readSnapshot(shiftId) }
       }
       if (!availableActions(worker).includes(action)) {

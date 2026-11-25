@@ -12,6 +12,15 @@ export function Portrait({ id, name }: { id: string; name: string }) {
   if (photo && photo !== failedPhoto) {
     return <img className="avatar" src={'/assets/' + photo + '.jpg'} alt="" onError={() => setFailedPhoto(photo)} />
   }
-  const initials = name.trim().split(/\s+/).slice(0, 2).map(word => word[0]).join('')
-  return <span className="avatar initials" aria-hidden="true">{initials}</span>
+  const initials = name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map(word => word[0])
+    .join('')
+  return (
+    <span className="avatar initials" aria-hidden="true">
+      {initials}
+    </span>
+  )
 }

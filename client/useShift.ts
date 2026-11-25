@@ -12,7 +12,7 @@ export function useShift() {
 
   // A slower read or write response can arrive after a newer stream event.
   const applySnapshot = useCallback((next: Snapshot) => {
-    setSnapshot((current) => (current && current.revision > next.revision ? current : next))
+    setSnapshot(current => (current && current.revision > next.revision ? current : next))
   }, [])
 
   useEffect(() => {
@@ -28,7 +28,7 @@ export function useShift() {
     // The initial read can render while the live connection is being established.
     // Every newly connected stream also starts with the current state.
     fetch(endpoint, { signal: controller.signal })
-      .then(async (response) => {
+      .then(async response => {
         if (!response.ok) throw new Error('Shift unavailable')
         applySnapshot((await response.json()) as Snapshot)
       })
@@ -44,26 +44,29 @@ export function useShift() {
 
   async function write(workerId: string, action: string, headers: Record<string, string>) {
     const response = await fetch(endpoint + '/workers/' + encodeURIComponent(workerId) + '/' + action, {
-      method: 'POST', headers,
+      method: 'POST',
+      headers,
     })
     if (!response.ok) {
       const problem = await response.json().catch(() => null)
       throw new Error(problem?.error?.message ?? 'Could not confirm the change. Try again.')
     }
-    const result = await response.json() as { snapshot: Snapshot }
+    const result = (await response.json()) as { snapshot: Snapshot }
     applySnapshot(result.snapshot)
   }
 
   function invite(workerId: string, role: Role) {
     if (!snapshot) throw new Error('Wait for the roster to load.')
     return write(workerId, 'invite', {
-      'X-Demo-Role': role, 'Idempotency-Key': workerId + '/invite/' + snapshot.revision,
+      'X-Demo-Role': role,
+      'Idempotency-Key': workerId + '/invite/' + snapshot.revision,
     })
   }
 
   function respond(workerId: string, action: WorkerAction, revision: number) {
     return write(workerId, action, {
-      'X-Demo-Role': 'worker', 'X-Demo-Worker-Id': workerId,
+      'X-Demo-Role': 'worker',
+      'X-Demo-Worker-Id': workerId,
       'Idempotency-Key': workerId + '/' + action + '/' + revision,
     })
   }

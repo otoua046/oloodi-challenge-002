@@ -9,4 +9,7 @@ const app = createApp({
 app.server.listen(port, host, () => {
   console.log(`Staffing dashboard listening on http://${host}:${port}`)
 })
-for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => { void app.close() })
+for (const signal of ['SIGINT', 'SIGTERM'])
+  process.once(signal, () => {
+    void app.close()
+  })

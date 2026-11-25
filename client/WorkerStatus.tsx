@@ -2,8 +2,13 @@ import { useState } from 'react'
 import type { Worker } from '../shared/types'
 
 export const statusLabels = {
-  uninvited: 'Uninvited', invited: 'Invited', accepted: 'Accepted', declined: 'Declined', cancelled: 'Cancelled',
-  checked_in: 'Checked in', checked_out: 'Checked out',
+  uninvited: 'Uninvited',
+  invited: 'Invited',
+  accepted: 'Accepted',
+  declined: 'Declined',
+  cancelled: 'Cancelled',
+  checked_in: 'Checked in',
+  checked_out: 'Checked out',
 } as const
 export type WorkerState = keyof typeof statusLabels
 
@@ -18,5 +23,10 @@ export function WorkerStatus({ worker }: { worker: Worker }) {
   const [initial] = useState(state)
   const [changed, setChanged] = useState(false)
   if (!changed && state !== initial) setChanged(true)
-  return <span key={state} className={'badge ' + state + (changed ? ' changed' : '')}><i />{statusLabels[state]}</span>
+  return (
+    <span key={state} className={'badge ' + state + (changed ? ' changed' : '')}>
+      <i />
+      {statusLabels[state]}
+    </span>
+  )
 }

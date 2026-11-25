@@ -89,7 +89,7 @@ export function openShiftDatabase(databasePath: string) {
       } else if (db.prepare('PRAGMA user_version').get()?.user_version !== schemaVersion) {
         throw new Error(
           `${databasePath} was created by an older version of this demo. ` +
-          'Delete it (with Docker: docker compose down -v) and start again from the seed.',
+            'Delete it (with Docker: docker compose down -v) and start again from the seed.',
         )
       }
     })
@@ -104,8 +104,12 @@ export function openShiftDatabase(databasePath: string) {
     bumpRevision: db.prepare('UPDATE state SET revision = revision + 1'),
     workers: db.prepare('SELECT * FROM workers ORDER BY id'),
     worker: db.prepare('SELECT * FROM workers WHERE id = ?'),
-    activity: db.prepare('SELECT id, kind, actor, workerId, workerName, occurredAt FROM activity ORDER BY occurredAt DESC, id DESC'),
-    addEvent: db.prepare('INSERT INTO activity(kind, actor, workerId, workerName, occurredAt, requestKey) VALUES (?, ?, ?, ?, ?, ?)'),
+    activity: db.prepare(
+      'SELECT id, kind, actor, workerId, workerName, occurredAt FROM activity ORDER BY occurredAt DESC, id DESC',
+    ),
+    addEvent: db.prepare(
+      'INSERT INTO activity(kind, actor, workerId, workerName, occurredAt, requestKey) VALUES (?, ?, ?, ?, ?, ?)',
+    ),
     eventForKey: db.prepare('SELECT kind FROM activity WHERE workerId = ? AND requestKey = ?'),
     receipt: db.prepare('SELECT workerId, invitedAt FROM invitation_receipts WHERE requestKey = ?'),
     addReceipt: db.prepare('INSERT INTO invitation_receipts(requestKey, workerId, invitedAt) VALUES (?, ?, ?)'),
@@ -136,12 +140,18 @@ export function openShiftDatabase(databasePath: string) {
     saveInvitationReceipt: (key: string, workerId: string, invitedAt: string) => {
       sql.addReceipt.run(key, workerId, invitedAt)
     },
-    markInvited: (workerId: string, at: string) => { sql.markInvited.run(at, workerId) },
+    markInvited: (workerId: string, at: string) => {
+      sql.markInvited.run(at, workerId)
+    },
     setParticipation: (workerId: string, participation: Worker['participation']) => {
       sql.setParticipation.run(participation, workerId)
     },
-    checkIn: (workerId: string, at: string) => { sql.checkIn.run(at, workerId) },
-    checkOut: (workerId: string, at: string) => { sql.checkOut.run(at, workerId) },
+    checkIn: (workerId: string, at: string) => {
+      sql.checkIn.run(at, workerId)
+    },
+    checkOut: (workerId: string, at: string) => {
+      sql.checkOut.run(at, workerId)
+    },
     restoreSeedRoster: () => db.exec(seedRoster),
   }
 }

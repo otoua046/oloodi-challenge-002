@@ -46,9 +46,8 @@ function roleFor(request: IncomingMessage): Role {
 // Any user name is accepted. Comparing digests keeps the check constant-time whatever the input length.
 function requirePreviewPassword(request: IncomingMessage, response: ServerResponse, password: string) {
   const [scheme, encoded] = (request.headers.authorization ?? '').split(' ')
-  const supplied = scheme === 'Basic' && encoded
-    ? Buffer.from(encoded, 'base64').toString().split(':').slice(1).join(':')
-    : ''
+  const supplied =
+    scheme === 'Basic' && encoded ? Buffer.from(encoded, 'base64').toString().split(':').slice(1).join(':') : ''
   const digest = (value: string) => createHash('sha256').update(value).digest()
   if (!timingSafeEqual(digest(supplied), digest(password))) {
     response.setHeader('WWW-Authenticate', 'Basic realm="Tideway preview", charset="UTF-8"')
@@ -162,7 +161,7 @@ export function createApp({ databasePath, clientDir = 'dist/client', now, previe
     live.close()
     if (server.listening) {
       await new Promise<void>((done, reject) => {
-        server.close(error => error ? reject(error) : done())
+        server.close(error => (error ? reject(error) : done()))
         server.closeAllConnections()
       })
     }
