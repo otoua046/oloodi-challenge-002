@@ -17,6 +17,8 @@ button, select { font: inherit; }
 :is(button, select, a):focus-visible { outline: 3px solid #24867a; outline-offset: 3px; }
 .app-header :focus-visible { outline-color: var(--foam); }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+/* Layout follows the width of its container, so the same views fit the page and the phone frame. */
+.app, .phone-scroll { container-type: inline-size; }
 .wrap, .header-inner { width: min(1120px, calc(100% - 80px)); margin-inline: auto; }
 .brand, .role-control, .role-select, nav, .connection, .panel-heading, .identity, .worker-total, .shift-details, .shift-details span, .shift-place, .invite, .badge { display: flex; align-items: center; }
 
@@ -54,7 +56,7 @@ option { color: #12302b; background: #fff; }
 .connection i, .badge i { flex: none; width: 7px; height: 7px; background: currentColor; border-radius: 50%; }
 .connection.live { color: var(--foam); }
 .shift-main { display: flex; align-items: flex-end; justify-content: space-between; gap: 28px 40px; margin-top: 34px; }
-h1 { font: 400 clamp(40px, 5.6vw, 70px)/1 var(--serif); letter-spacing: -.03em; margin: 0 0 16px; }
+h1 { font: 400 clamp(40px, 5.6cqi, 70px)/1 var(--serif); letter-spacing: -.03em; margin: 0 0 16px; }
 .shift-place { margin: 0; font-size: 15px; color: #dfe9d6; }
 .crew { display: flex; gap: 18px; margin: 0; padding: 0; list-style: none; }
 .crew li { display: grid; justify-items: center; align-content: start; gap: 3px; width: 92px; text-align: center; font-size: 13px; font-weight: 600; }
@@ -166,7 +168,7 @@ tr > :last-child { padding-right: 26px; }
 @keyframes take-place { from { opacity: 0; scale: .75; } }
 @keyframes count-up { from { opacity: 0; translate: 0 .35em; } }
 
-@media (max-width: 720px) {
+@container (max-width: 720px) {
   .wrap, .header-inner { width: calc(100% - 32px); }
   .header-inner { flex-wrap: wrap; gap: 8px; padding-block: 12px 10px; }
   nav { order: 3; width: 100%; margin-left: -8px; }
@@ -196,6 +198,25 @@ tr > :last-child { padding-right: 26px; }
   .invite { padding: 7px 12px 7px 10px; }
   .badge { font-size: 12px; padding: 5px 9px 5px 8px; }
 }
-@media (max-width: 370px) {
+@container (max-width: 370px) {
   .invite svg, .worker-total svg { display: none; }
+}
+
+/* The worker's view sits on a phone over the band. Positions are measured from iphone-bezel.png (450 × 920):
+   the glass is 400 × 872 at (25, 24) with a 58 px corner, and the camera island spans 126 px of its width. */
+.device-stage { padding: 32px 16px 64px; background: linear-gradient(var(--tide) 0 300px, transparent 300px); }
+.phone { position: relative; margin-inline: auto; height: min(920px, calc(100dvh - 104px)); min-height: 640px; aspect-ratio: 450 / 920; }
+.phone::before { content: ""; position: absolute; inset: .9% 2%; border-radius: 16% / 7.8%; box-shadow: 0 50px 90px -40px rgb(14 58 52 / .7); }
+.phone::after { content: ""; position: absolute; inset: 0; z-index: 3; background: url(./iphone-bezel.png) center / 100% 100% no-repeat; pointer-events: none; }
+.phone-screen { position: absolute; left: 5.556%; top: 2.609%; width: 88.889%; height: 94.783%; overflow: hidden; border-radius: 14.5% / 6.65%; background: #f1f4ee; }
+.phone-screen::after { content: ""; position: absolute; left: 50%; bottom: 1%; width: 34%; height: 5px; translate: -50%; border-radius: 3px; background: #12302b; }
+.status-bar { position: absolute; inset: 0 0 auto; z-index: 2; display: grid; grid-template-columns: 1fr 31.5% 1fr; place-items: center; height: 6.2%; padding-top: 1%; background: var(--tide); color: #fff; font-size: 14px; font-weight: 600; }
+.phone-scroll { height: 100%; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; padding-top: 13.5%; }
+.phone-scroll .content { padding-bottom: 40px; }
+@media (max-width: 720px) {
+  .device-stage { padding: 0; background: none; }
+  .phone { height: auto; min-height: 0; aspect-ratio: auto; }
+  .phone-screen { position: static; width: auto; height: auto; overflow: visible; border-radius: 0; background: none; }
+  .phone::before, .phone::after, .phone-screen::after, .status-bar { display: none; }
+  .phone-scroll { height: auto; overflow: visible; padding-top: 0; }
 }

@@ -36,7 +36,7 @@ The shift requires **3** people. Initially **1** place is filled, **2** remain, 
 ## Try the worker flow
 
 1. In a Manager tab, invite Alex Chen. Leave that tab open.
-2. Open the same URL in a second tab. Choose **Worker** in the role menu and **Alex Chen** in the worker selector beside it.
+2. Open the same URL in a second tab. Choose **Worker** in the role menu and **Alex Chen** in the worker selector beside it. On a wide window the worker’s view appears on a phone.
 3. Choose **Accept shift** or **Decline invitation**. After accepting, you can cancel before checking in and accept again after cancelling.
 4. Choose **Check in**, then **Check out**. Check-out is final. Watch the manager’s roster, counts, and Activity update in the first tab.
 

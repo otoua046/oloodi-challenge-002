@@ -6,6 +6,7 @@ import { ShiftHeader, Roster } from './ShiftOverview'
 import { WorkerShift } from './WorkerShift'
 import { Activity } from './Activity'
 import { Portrait } from './Portrait'
+import { PhoneFrame } from './PhoneFrame'
 import { demoManager } from '../shared/types'
 import { useShift } from './useShift'
 import './style.css'
@@ -43,8 +44,13 @@ function App() {
     return <Roster snapshot={snapshot} role={role} invite={invite} />
   }
 
+  const page = snapshot && <>
+    <ShiftHeader snapshot={snapshot} connection={connection} detailed={!activityOpen && role !== 'worker'} />
+    <div className="wrap content">{renderPage()}</div>
+  </>
+
   return (
-    <>
+    <div className="app">
       <header className="app-header">
         <div className="header-inner">
           <a className="brand" href="#overview" aria-label="Tideway Staffing overview">
@@ -89,11 +95,8 @@ function App() {
         </div>
       </header>
       <main>
-        {snapshot ? (
-          <>
-            <ShiftHeader snapshot={snapshot} connection={connection} detailed={!activityOpen && role !== 'worker'} />
-            <div className="wrap content">{renderPage()}</div>
-          </>
+        {page ? (
+          role === 'worker' ? <PhoneFrame>{page}</PhoneFrame> : page
         ) : (
           <p className="wrap loading-panel" role="status">
             {loadError || connection === 'Reconnecting'
@@ -102,7 +105,7 @@ function App() {
           </p>
         )}
       </main>
-    </>
+    </div>
   )
 }
 
