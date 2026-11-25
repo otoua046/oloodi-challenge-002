@@ -94,3 +94,20 @@ test('a manual invitation reflects the confirmed write while the stream is down'
     resume();
   }
 });
+
+test('the roster and activity page show the same committed invitation', async ({ app, page }) => {
+  await openDashboard(page, app.url);
+  await expect(page.getByRole('columnheader', { name: 'Status' })).toBeVisible();
+  await expect(row(page, 'Jordan Lee')).toContainText('Checked in');
+  await expect(page.getByText('worker-001', { exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Invite Alex Chen' }).click();
+  await expect(row(page, 'Alex Chen')).toContainText('Invited');
+  await page.getByRole('link', { name: 'Activity' }).click();
+  await expect(page.getByText('Maya Patel invited Alex Chen')).toHaveCount(1);
+  await expect(page.getByText('Jordan Lee accepted the shift')).toBeVisible();
+  await expect(page.getByText('Jordan Lee checked in')).toBeVisible();
+  await page.reload();
+  await expect(page.getByText('Maya Patel invited Alex Chen')).toBeVisible();
+  await page.getByRole('link', { name: 'Overview', exact: true }).click();
+  await expect(row(page, 'Alex Chen')).toContainText('Invited');
+});

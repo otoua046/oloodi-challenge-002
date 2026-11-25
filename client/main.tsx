@@ -1,7 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import type { Role, Snapshot, Worker } from '../shared/types'
 import { Icon, VenuePlan, type IconName } from './Icons'
+import { Activity } from './Activity'
+import { demoManager } from '../shared/types'
 import { useShift } from './useShift'
 import './style.css'
 
@@ -21,7 +23,7 @@ function ShiftHeader({ shift }: { shift: Snapshot['shift'] }) {
       <div className="shift-content">
         <div className="eyebrow">
           <span />
-          {shift.id}
+          Shift overview
         </div>
         <h1 id="shift-title">{shift.title}</h1>
         <div className="shift-details">
@@ -75,42 +77,22 @@ function Metrics({ snapshot }: { snapshot: Snapshot }) {
 
 const participationLabels = { uninvited: 'Uninvited', invited: 'Invited', accepted: 'Accepted' } as const
 
-const attendanceLabels = {
-  not_started: 'Not started',
-  checked_in: 'Checked in',
-  checked_out: 'Checked out',
-} as const
-
-function Timestamp({ value, timeZone }: { value: string; timeZone: string }) {
-  const local = formatDate(value, timeZone, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    timeZoneName: 'short',
-  })
-  return <time dateTime={value}>{local}</time>
+const portraits: Record<string, string> = {
+  'worker-001': 'jordan', 'worker-002': 'alex-chen', 'worker-003': 'alex-rivera',
 }
 
-function Attendance({ worker, timeZone }: { worker: Worker; timeZone: string }) {
-  return (
-    <div className="attendance">
-      <span className={'attendance-label ' + worker.attendance}>
-        <i />
-        {attendanceLabels[worker.attendance]}
-      </span>
-      {worker.checkedInAt && (
-        <small>
-          In <Timestamp value={worker.checkedInAt} timeZone={timeZone} />
-        </small>
-      )}
-      {worker.checkedOutAt && (
-        <small>
-          Out <Timestamp value={worker.checkedOutAt} timeZone={timeZone} />
-        </small>
-      )}
-    </div>
-  )
+function Portrait({ worker }: { worker: Worker }) {
+  const [failed, setFailed] = useState(false)
+  const photo = portraits[worker.id]
+  return photo && !failed
+    ? <img className="avatar" src={'/assets/' + photo + '.jpg'} alt="" onError={() => setFailed(true)} />
+    : <span className="avatar initials" aria-hidden="true">{worker.name.split(' ').map(part => part[0]).slice(0, 2).join('')}</span>
+}
+
+function Status({ worker }: { worker: Worker }) {
+  const state = worker.attendance === 'not_started' ? worker.participation : worker.attendance
+  const labels = { ...participationLabels, checked_in: 'Checked in', checked_out: 'Checked out' }
+  return <span className={'badge ' + state}><i />{labels[state]}</span>
 }
 
 function Roster({
@@ -143,8 +125,8 @@ function Roster({
     }
   }
   return (
-    <section className="roster" aria-labelledby="roster-title">
-      <div className="roster-heading">
+    <section className="panel roster" aria-labelledby="roster-title">
+      <div className="panel-heading">
         <h2 id="roster-title">Worker roster</h2>
         <span className="worker-total">
           <Icon name="people" size={15} />
@@ -158,48 +140,22 @@ function Roster({
         <thead>
           <tr>
             <th scope="col">Worker</th>
-            <th scope="col">Participation</th>
-            <th scope="col">Attendance</th>
+            <th scope="col">Status</th>
             <th scope="col" className="action-cell">
               Action
             </th>
           </tr>
         </thead>
         <tbody>
-          {snapshot.workers.map((worker, index) => (
+          {snapshot.workers.map((worker) => (
             <tr key={worker.id}>
               <th scope="row" className="identity-cell">
                 <div className="identity">
-                  <span className={'avatar avatar-' + (index % 3)} aria-hidden="true">
-                    {worker.name
-                      .split(' ')
-                      .map((part) => part[0])
-                      .slice(0, 2)
-                      .join('')}
-                  </span>
-                  <div>
-                    <span className="worker-name">{worker.name}</span>
-                    <span className="worker-id">{worker.id}</span>
-                  </div>
+                  <Portrait worker={worker} />
+                  <span className="worker-name">{worker.name}</span>
                 </div>
               </th>
-              <td>
-                <span className="mobile-label" aria-hidden="true">
-                  Participation
-                </span>
-                <span className={'badge ' + worker.participation}>{participationLabels[worker.participation]}</span>
-                {worker.invitedAt && worker.participation === 'invited' && (
-                  <small className="invite-time">
-                    <Timestamp value={worker.invitedAt} timeZone={snapshot.shift.timeZone} />
-                  </small>
-                )}
-              </td>
-              <td>
-                <span className="mobile-label" aria-hidden="true">
-                  Attendance
-                </span>
-                <Attendance worker={worker} timeZone={snapshot.shift.timeZone} />
-              </td>
+              <td><Status worker={worker} /></td>
               <td className="action-cell">
                 {role === 'manager' && worker.participation === 'uninvited' ? (
                   <button
@@ -235,28 +191,31 @@ function App() {
   const { snapshot, connection, loadError, invite } = useShift()
   const [role, setRole] = useState<Role>('manager')
 
+  const [activityOpen, setActivityOpen] = useState(() => window.location.hash === '#activity')
+  useEffect(() => {
+    const navigate = () => setActivityOpen(window.location.hash === '#activity')
+    window.addEventListener('hashchange', navigate)
+    return () => window.removeEventListener('hashchange', navigate)
+  }, [])
+
   return (
     <>
       <header className="app-header">
         <div className="header-inner">
-          <div className="brand">
-            <svg aria-hidden="true" viewBox="0 0 32 32" width="31" height="31" fill="none">
-              <rect width="32" height="32" rx="9" fill="#594aca" />
-              <ellipse
-                cx="16"
-                cy="16"
-                rx="7"
-                ry="10"
-                transform="rotate(37 16 16)"
-                stroke="#fff"
-                strokeWidth="3.8"
-              />
+          <a className="brand" href="#overview" aria-label="Tideway Staffing overview">
+            <svg viewBox="0 0 32 32" width="38" height="38" aria-hidden="true">
+              <rect width="32" height="32" rx="8" fill="#12574f" />
+              <path d="M5 12q5-5 11 0t11 0M5 17q5-5 11 0t11 0M5 22q5-5 11 0t11 0" fill="none" stroke="#d9eba8" strokeWidth="2.3" />
             </svg>
-            <span className="wordmark">oloodi</span>
-            <span className="brand-section">Staffing</span>
-          </div>
+            <span><b>Tideway</b><small>Staffing</small></span>
+          </a>
+          <nav aria-label="Shift navigation">
+            <a href="#overview" aria-current={!activityOpen ? 'page' : undefined}>Overview</a>
+            <a href="#activity" aria-current={activityOpen ? 'page' : undefined}>Activity</a>
+          </nav>
           <div className="role-control">
-            <label htmlFor="demo-role">Demo role</label>
+            <label htmlFor="demo-role" className="sr-only">Demo role</label>
+            {role === 'manager' && <span className="manager-name">{demoManager}</span>}
             <div className="role-select">
               <Icon name="shield" size={15} />
               <select
@@ -274,7 +233,7 @@ function App() {
       </header>
       <main>
         <div className="screen-heading">
-          <p>Staffing dashboard</p>
+          <p>{activityOpen ? 'Shift history' : 'Staffing dashboard'}</p>
           <span
             role="status"
             aria-label={'Live updates: ' + connection}
@@ -287,8 +246,10 @@ function App() {
         {snapshot ? (
           <>
             <ShiftHeader shift={snapshot.shift} />
-            <Metrics snapshot={snapshot} />
-            <Roster snapshot={snapshot} role={role} invite={invite} />
+            {activityOpen ? <Activity events={snapshot.activity} shift={snapshot.shift} /> : <>
+              <Metrics snapshot={snapshot} />
+              <Roster snapshot={snapshot} role={role} invite={invite} />
+            </>}
           </>
         ) : (
           <p className="loading-panel" role="status">

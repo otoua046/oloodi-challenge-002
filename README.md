@@ -1,4 +1,4 @@
-# Oloodi Coding Challenge 002 · Staffing assistant
+# Tideway Staffing · Coding Challenge 002 · Staffing assistant
 
 Build a staffing assistant that works with the dashboard in this repository. The starter includes the dashboard, a seeded shift, and an API for reading the roster and inviting a worker. Follow the Challenge 002 brief for the full assignment.
 
@@ -33,6 +33,12 @@ npm start
 
 The shift requires **3** people. Initially **1** place is filled, **2** remain, **1** worker is checked in and **0** have checked out. Both Alexes are eligible for invitation. A first name alone is ambiguous. Inviting either worker changes participation to Invited and records the invitation time. Only acceptance fills a place. The starter exposes invitation as its only staffing mutation.
 
+## Roster and activity
+
+Overview shows each worker’s latest status. Attendance takes precedence once someone has checked in or out. The API retains the separate participation and attendance fields and the stable IDs. Portraits are fictional and bundled with the app.
+
+Activity shows the shift’s events newest first, grouped by Toronto date. The initial timeline contains Jordan’s invitation, acceptance, and check-in. Maya Patel is the named demo Manager for both dashboard and API invitations. An invitation and its activity entry commit together. A rejected or repeated invitation adds no entry. Reset restores the roster and adds an event to the existing timeline. When upgrading an existing database, older non-seed invitations are attributed to the demo manager role, the identity the old app recorded.
+
 ## Integration contract
 
 The local role selector starts on Manager. API callers select a demo identity using `X-Demo-Role: manager` or `X-Demo-Role: viewer`. Omitting the header selects Viewer. The header is a public local fixture. An integration should pass its current caller’s role from application state. The server checks permission on every write.
@@ -57,7 +63,7 @@ curl -N "$SHIFT/events"
 
 The second command returns 403. The third invites Alex Chen. Repeat it to get the same `invitation` object, including its original UTC timestamp. A repeat does not increment the revision or publish another update. Its accompanying `snapshot` is current and may include intervening changes to other workers.
 
-The snapshot contains `shift` (ID, title, location, start/end instants, time zone, required workers), `workers` (stable IDs, full names, participation, attendance and nullable timestamps), `counts` and a numeric `revision`. The invite response wraps it as `{ invitation: { shiftId, workerId, invitedAt }, snapshot }`. See [shared/types.ts](shared/types.ts) for the exact field names, types and status values.
+The snapshot contains `shift` (ID, title, location, start/end instants, time zone, required workers), `workers` (stable IDs, full names, participation, attendance and nullable timestamps), `counts`, the ordered `activity` array, and a numeric `revision`. The invite response wraps it as `{ invitation: { shiftId, workerId, invitedAt }, snapshot }`. See [shared/types.ts](shared/types.ts) for the exact field names, types and status values.
 
 Errors have the shape `{"error":{"code":"FORBIDDEN","message":"This action requires the Manager role."}}`.
 

@@ -113,7 +113,9 @@ test('interleaved invitations produce one mutation per worker; reset restores th
     assert.deepEqual(receipts[index], { shiftId: seed.shift.id, workerId: id, invitedAt: worker.invitedAt });
   });
   const restored = await success<Snapshot>(await request(reset, 'POST', 'manager'));
-  assert.deepEqual(restored, { ...seed, revision: after.revision + 1 });
+  assert.deepEqual(restored, { ...seed, activity: restored.activity, revision: after.revision + 1 });
+  assert.equal(restored.activity.length, seed.activity.length + 3);
+  assert.equal(restored.activity.filter(event => event.kind === 'reset').length, 1);
   assert.deepEqual(await success(await request(shift)), restored);
 });
 
@@ -136,4 +138,23 @@ test('a restart preserves committed invitations and accepts their retries', asyn
   } finally {
     await reopened.close();
   }
+});
+
+test('activity records the seeded timeline and one entry per successful invitation', async (t) => {
+  const time = '2026-11-25T21:42:00.000Z';
+  const request = await fixture(t, () => time);
+  const seed = await success<Snapshot>(await request(shift));
+  assert.deepEqual(seed.activity.map(e => [e.kind, e.actor, e.workerName]), [
+    ['checked_in', 'Jordan Lee', 'Jordan Lee'],
+    ['accepted', 'Jordan Lee', 'Jordan Lee'],
+    ['invited', 'Maya Patel', 'Jordan Lee'],
+  ]);
+  await failure(await request(invite('worker-002'), 'POST', 'viewer'), 403, 'FORBIDDEN');
+  const first = await success<InviteResponse>(await request(invite('worker-002'), 'POST', 'manager'));
+  assert.equal(first.snapshot.activity.length, 4);
+  assert.partialDeepStrictEqual(first.snapshot.activity[0], {
+    kind: 'invited', actor: 'Maya Patel', workerName: 'Alex Chen', workerId: 'worker-002', occurredAt: time,
+  });
+  const retry = await success<InviteResponse>(await request(invite('worker-002'), 'POST', 'manager'));
+  assert.deepEqual(retry.snapshot.activity, first.snapshot.activity);
 });

@@ -20,7 +20,19 @@ export interface Worker {
   checkedOutAt: string | null
 }
 
+export interface ActivityEvent {
+  id: number
+  kind: 'invited' | 'accepted' | 'checked_in' | 'checked_out' | 'reset'
+  actor: string
+  workerId: string | null
+  workerName: string | null
+  occurredAt: string
+}
+
+export const demoManager = 'Maya Patel'
+
 export interface Snapshot {
+  activity: ActivityEvent[]
   revision: number
   shift: Shift
   counts: { filled: number; remaining: number; checkedIn: number; checkedOut: number }
