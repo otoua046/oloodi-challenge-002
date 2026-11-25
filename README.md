@@ -1,4 +1,4 @@
-# Oloodi Coding Challenge 002 · Staffing assistant
+# Tideway Staffing · Coding Challenge 002 · Staffing assistant
 
 Build a staffing assistant that works with the dashboard in this repository. The starter includes the dashboard, a seeded shift, and an API for reading the roster and inviting a worker. Follow the Challenge 002 brief for the full assignment.
 
@@ -31,20 +31,36 @@ npm start
 | Alex Chen | `worker-002` | Uninvited | Not started |
 | Alex Rivera | `worker-003` | Uninvited | Not started |
 
-The shift requires **3** people. Initially **1** place is filled, **2** remain, **1** worker is checked in and **0** have checked out. Both Alexes are eligible for invitation. A first name alone is ambiguous. Inviting either worker changes participation to Invited and records the invitation time. Only acceptance fills a place. The starter exposes invitation as its only staffing mutation.
+The shift requires **3** people. Initially **1** place is filled, **2** remain, **1** worker is checked in and **0** have checked out. Both Alexes are eligible for invitation. A first name alone is ambiguous. Inviting either worker changes participation to Invited and records the invitation time. Only acceptance fills a place.
+
+## Try the worker flow
+
+1. In a Manager tab, invite Alex Chen. Leave that tab open.
+2. Open the same URL in a second tab. Choose **Worker** in the role menu and **Alex Chen** in the worker selector.
+3. Choose **Accept shift** or **Decline invitation**. After accepting, you can cancel before checking in and accept again after cancelling.
+4. Choose **Check in**, then **Check out**. Check-out is final. Watch the manager’s roster, counts, and Activity update in the first tab.
+
+The demo keeps the role and worker selection per tab across refreshes. Each worker action records the selected worker as the actor. Accepted workers count toward filled spots throughout attendance.
+
+## Roster and activity
+
+Overview shows each worker’s latest status. Attendance takes precedence once someone has checked in or out. The API retains the separate participation and attendance fields and the stable IDs. Portraits are fictional and bundled with the app.
+
+Activity shows the shift’s events newest first, grouped by Toronto date. The initial timeline contains Jordan’s invitation, acceptance, and check-in. Maya Patel is the named demo Manager for both dashboard and API invitations. An invitation and its activity entry commit together. A rejected or repeated invitation adds no entry. Reset restores the roster and adds an event to the existing timeline. When upgrading an existing database, older non-seed invitations are attributed to the demo manager role, the identity the old app recorded.
 
 ## Integration contract
 
-The local role selector starts on Manager. API callers select a demo identity using `X-Demo-Role: manager` or `X-Demo-Role: viewer`. Omitting the header selects Viewer. The header is a public local fixture. An integration should pass its current caller’s role from application state. The server checks permission on every write.
+The local role selector starts on Manager. API callers select a demo identity using `X-Demo-Role: manager`, `X-Demo-Role: viewer`, or `X-Demo-Role: worker`. Omitting the header selects Viewer. The header is a public local fixture. An integration should pass its current caller’s role from application state. The server checks permission on every write.
 
 | Method | Path | Success response |
 | --- | --- | --- |
 | GET | `/api/shifts/:shiftId` | Current dashboard snapshot |
 | POST | `/api/shifts/:shiftId/workers/:workerId/invite` | Manager only. Invitation receipt and committed snapshot |
+| POST | `/api/shifts/:shiftId/workers/:workerId/:action` | Selected worker only. Actions are `accept`, `decline`, `cancel`, `check-in`, and `check-out`. Returns `{ changed, snapshot }`. |
 | GET | `/api/shifts/:shiftId/events` | SSE stream of named `snapshot` events |
 | POST | `/api/demo/reset` | Manager only. Restores the seed and returns its new snapshot |
 
-All JSON endpoints return HTTP 200 on success. Both POST endpoints take an empty body. The stable IDs in the path identify the target.
+All JSON endpoints return HTTP 200 on success. POST endpoints take an empty body. Worker actions require the worker role, a matching `X-Demo-Worker-Id`, and an `Idempotency-Key` (1–128 characters). Reuse the key when retrying the same action and use a fresh key for a new decision. The stable IDs in the path identify the target.
 
 ```sh
 BASE=http://127.0.0.1:3000
@@ -57,7 +73,7 @@ curl -N "$SHIFT/events"
 
 The second command returns 403. The third invites Alex Chen. Repeat it to get the same `invitation` object, including its original UTC timestamp. A repeat does not increment the revision or publish another update. Its accompanying `snapshot` is current and may include intervening changes to other workers.
 
-The snapshot contains `shift` (ID, title, location, start/end instants, time zone, required workers), `workers` (stable IDs, full names, participation, attendance and nullable timestamps), `counts` and a numeric `revision`. The invite response wraps it as `{ invitation: { shiftId, workerId, invitedAt }, snapshot }`. See [shared/types.ts](shared/types.ts) for the exact field names, types and status values.
+The snapshot contains `shift` (ID, title, location, start/end instants, time zone, required workers), `workers` (stable IDs, full names, participation, attendance and nullable timestamps), `counts`, the ordered `activity` array, and a numeric `revision`. The invite response wraps it as `{ invitation: { shiftId, workerId, invitedAt }, snapshot }`. See [shared/types.ts](shared/types.ts) for the exact field names, types and status values.
 
 Errors have the shape `{"error":{"code":"FORBIDDEN","message":"This action requires the Manager role."}}`.
 
@@ -91,4 +107,4 @@ npm run test:e2e
 
 On Linux CI, install browser system dependencies with `npx playwright install --with-deps chromium`. To use an existing Chromium, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` to its executable path.
 
-The API tests use isolated SQLite databases and a controllable clock. They cover permissions, invalid transitions, repeat and concurrent writes, counts, reset, and persistence after restart. The three Playwright tests run isolated app instances. They check an API invitation reaching an open Viewer tab, a manual invite while the stream is down, and recovery after a missed update. The recovery test closes the real connection, holds the reconnect request, writes from an independent API client, checks that the row is still stale, and releases the request. It checks that the original browser document stays mounted.
+The API tests use isolated SQLite databases and a controllable clock. They cover permissions, invalid transitions, repeat and concurrent writes, counts, reset, and persistence after restart. The Playwright tests run isolated app instances. They check an API invitation reaching an open Viewer tab, a manual invite while the stream is down, and recovery after a missed update. The recovery test closes the real connection, holds the reconnect request, writes from an independent API client, checks that the row is still stale, and releases the request. It checks that the original browser document stays mounted.

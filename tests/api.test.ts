@@ -22,10 +22,10 @@ async function start(databasePath = ':memory:', now?: () => string) {
     throw error;
   }
   const { port } = server.address() as AddressInfo;
-  function request(path: string, method = 'GET', role?: string) {
+  function request(path: string, method = 'GET', role?: string, headers: Record<string, string> = {}) {
     return fetch(`http://127.0.0.1:${port}${path}`, {
       method,
-      headers: role === undefined ? {} : { 'X-Demo-Role': role },
+      headers: role === undefined ? headers : { ...headers, 'X-Demo-Role': role },
     });
   }
   return { request, close };
@@ -113,7 +113,9 @@ test('interleaved invitations produce one mutation per worker; reset restores th
     assert.deepEqual(receipts[index], { shiftId: seed.shift.id, workerId: id, invitedAt: worker.invitedAt });
   });
   const restored = await success<Snapshot>(await request(reset, 'POST', 'manager'));
-  assert.deepEqual(restored, { ...seed, revision: after.revision + 1 });
+  assert.deepEqual(restored, { ...seed, activity: restored.activity, revision: after.revision + 1 });
+  assert.equal(restored.activity.length, seed.activity.length + 3);
+  assert.equal(restored.activity.filter(event => event.kind === 'reset').length, 1);
   assert.deepEqual(await success(await request(shift)), restored);
 });
 
@@ -136,4 +138,61 @@ test('a restart preserves committed invitations and accepts their retries', asyn
   } finally {
     await reopened.close();
   }
+});
+
+test('activity records the seeded timeline and one entry per successful invitation', async (t) => {
+  const time = '2026-11-25T21:42:00.000Z';
+  const request = await fixture(t, () => time);
+  const seed = await success<Snapshot>(await request(shift));
+  assert.deepEqual(seed.activity.map(e => [e.kind, e.actor, e.workerName]), [
+    ['checked_in', 'Jordan Lee', 'Jordan Lee'],
+    ['accepted', 'Jordan Lee', 'Jordan Lee'],
+    ['invited', 'Maya Patel', 'Jordan Lee'],
+  ]);
+  await failure(await request(invite('worker-002'), 'POST', 'viewer'), 403, 'FORBIDDEN');
+  const first = await success<InviteResponse>(await request(invite('worker-002'), 'POST', 'manager'));
+  assert.equal(first.snapshot.activity.length, 4);
+  assert.partialDeepStrictEqual(first.snapshot.activity[0], {
+    kind: 'invited', actor: 'Maya Patel', workerName: 'Alex Chen', workerId: 'worker-002', occurredAt: time,
+  });
+  const retry = await success<InviteResponse>(await request(invite('worker-002'), 'POST', 'manager'));
+  assert.deepEqual(retry.snapshot.activity, first.snapshot.activity);
+});
+
+test('worker decisions enforce identity, preserve retries, and update counts and history', async t => {
+  const request = await fixture(t);
+  const id = 'worker-002';
+  const action = (name: string, key: string, actor = id, role = 'worker') =>
+    request(shift + '/workers/' + id + '/' + name, 'POST', role, {
+      'X-Demo-Worker-Id': actor, 'Idempotency-Key': key,
+    });
+  const post = async (name: string, key: string) =>
+    success<{ changed: boolean; snapshot: Snapshot }>(await action(name, key));
+
+  await failure(await action('accept', 'a'), 409, 'INVALID_TRANSITION');
+  await success(await request(invite(id), 'POST', 'manager'));
+  for (const role of ['manager', 'viewer']) await failure(await action('accept', 'a', id, role), 403, 'FORBIDDEN');
+  await failure(await action('accept', 'a', 'worker-003'), 403, 'FORBIDDEN');
+  await failure(await action('check-out', 'early'), 409, 'INVALID_TRANSITION');
+  const accepted = await post('accept', 'a');
+  assert.equal(accepted.snapshot.counts.filled, 2);
+  const cancelled = await post('cancel', 'b');
+  assert.equal(cancelled.snapshot.counts.filled, 1);
+  assert.deepEqual(await post('accept', 'a'), { changed: false, snapshot: cancelled.snapshot });
+  const reaccepted = await post('accept', 'c');
+  assert.equal(reaccepted.snapshot.counts.filled, 2);
+  const arrived = await post('check-in', 'd');
+  assert.equal(arrived.snapshot.counts.checkedIn, 2);
+  await failure(await action('cancel', 'late'), 409, 'INVALID_TRANSITION');
+  const finished = await post('check-out', 'e');
+  assert.deepEqual(finished.snapshot.counts, { filled: 2, remaining: 1, checkedIn: 1, checkedOut: 1 });
+  assert.deepEqual(await post('check-out', 'e'), { changed: false, snapshot: finished.snapshot });
+  assert.deepEqual(finished.snapshot.activity.filter(e => e.actor === 'Alex Chen').map(e => e.kind),
+    ['checked_out', 'checked_in', 'accepted', 'cancelled', 'accepted']);
+  await success(await request(reset, 'POST', 'manager'));
+  await success(await request(invite(id), 'POST', 'manager'));
+  const declined = await post('decline', 'f');
+  assert.equal(declined.snapshot.workers.find(w => w.id === id)?.participation, 'declined');
+  assert.equal(declined.snapshot.counts.filled, 1);
+  await failure(await action('check-in', 'g'), 409, 'INVALID_TRANSITION');
 });

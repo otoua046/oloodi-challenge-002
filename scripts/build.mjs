@@ -1,4 +1,4 @@
-import { copyFile, mkdir } from 'node:fs/promises'
+import { copyFile, cp, mkdir } from 'node:fs/promises'
 import { build } from 'esbuild'
 
 const output = 'dist/client'
@@ -14,3 +14,4 @@ await build({
   define: { 'process.env.NODE_ENV': '"production"' },
 })
 await copyFile('index.html', output + '/index.html')
+await cp('client/portraits', output + '/assets', { recursive: true })

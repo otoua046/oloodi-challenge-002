@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { extname, resolve } from 'node:path'
+import { workerActions, type WorkerAction } from '../shared/worker-actions.ts'
 import type { Role } from '../shared/types.ts'
 import { openStaffing } from './database.ts'
 import { liveDashboard } from './live.ts'
@@ -14,8 +15,8 @@ interface AppOptions {
 
 function roleFor(request: IncomingMessage): Role {
   const role = request.headers['x-demo-role'] ?? 'viewer'
-  if (role === 'viewer' || role === 'manager') return role
-  throw new ApiError(400, 'INVALID_ROLE', 'X-Demo-Role must be viewer or manager.')
+  if (role === 'viewer' || role === 'manager' || role === 'worker') return role
+  throw new ApiError(400, 'INVALID_ROLE', 'X-Demo-Role must be viewer, manager, or worker.')
 }
 
 function json(response: ServerResponse, status: number, value: unknown) {
@@ -36,6 +37,7 @@ const mediaTypes: Record<string, string> = {
   '.css': 'text/css; charset=utf-8',
   '.svg': 'image/svg+xml',
   '.woff2': 'font/woff2',
+  '.jpg': 'image/jpeg',
   '.png': 'image/png',
 }
 
@@ -62,6 +64,17 @@ export function createApp({ databasePath, clientDir = 'dist/client', now }: AppO
           requireMethod(request.method, 'POST', response)
           const { changed, result } = staffing.invite(role, invite[1]!, invite[2]!)
           if (changed) live.publish(result.snapshot)
+          json(response, 200, result)
+          return
+        }
+        const action = /^\/api\/shifts\/([^/]+)\/workers\/([^/]+)\/([^/]+)$/.exec(path)
+        if (action && Object.hasOwn(workerActions, action[3]!)) {
+          requireMethod(request.method, 'POST', response)
+          const actor = request.headers['x-demo-worker-id']
+          const key = request.headers['idempotency-key']
+          const result = staffing.workerAction(role, typeof actor === 'string' ? actor : undefined, action[1]!, action[2]!,
+            action[3] as WorkerAction, typeof key === 'string' ? key : undefined)
+          if (result.changed) live.publish(result.snapshot)
           json(response, 200, result)
           return
         }
