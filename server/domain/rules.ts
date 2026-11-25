@@ -1,4 +1,4 @@
-import type { Assignment, Role, Shift, StaffingCounts, Worker } from '../shared/types.ts'
+import type { Assignment, Role, Shift, StaffingCounts, Worker } from '../../shared/api-types.ts'
 
 // Rule violations carry a stable code. The HTTP layer decides which status each code maps to.
 export type StaffingErrorCode =

@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import type { ActivityEvent, Shift } from '../shared/types'
-import { Icon, type IconName } from './Icons'
-import { Portrait } from './Portrait'
+import type { ActivityEvent, Shift } from '../../shared/api-types'
+import { Icon, type IconName } from '../ui/Icons'
+import { Portrait } from '../ui/Portrait'
 
 const icons: Record<ActivityEvent['kind'], IconName> = {
   invited: 'invite',

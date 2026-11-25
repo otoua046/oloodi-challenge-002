@@ -1,7 +1,7 @@
 import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
-import { demoManager, type ActivityEvent, type Assignment, type Shift, type Worker } from '../../shared/types.ts'
+import { demoManager, type ActivityEvent, type Assignment, type Shift, type Worker } from '../../shared/api-types.ts'
 
 // Raise this when the schema changes. A database with another version is refused rather than migrated.
 const schemaVersion = 3

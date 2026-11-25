@@ -1,7 +1,7 @@
 import { once } from 'node:events'
 import type { Server } from 'node:http'
 import { expect, test as base, type Page } from '@playwright/test'
-import { createApp } from '../../server/app.ts'
+import { createApp } from '../../server/http/app.ts'
 
 const shiftPath = '/api/shifts/shift-001'
 const managerHeaders = { 'X-Demo-Role': 'manager' }

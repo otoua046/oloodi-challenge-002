@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { Assignment } from '../shared/types'
+import type { Assignment } from '../../shared/api-types'
 
 export const statusLabels = {
   uninvited: 'Uninvited',
