@@ -2,6 +2,12 @@
 
 Build a staffing assistant that works with the dashboard in this repository. The starter includes the dashboard, a seeded shift, and an API for reading the roster and inviting a worker. Follow the Challenge 002 brief for the full assignment.
 
+A hosted preview runs at https://oloodi-challenge-002.fly.dev. It is password protected: email oussamatouahri430@gmail.com for access. Build and run your work locally.
+
+![Manager view: the shift, its staffing counts and the worker roster](docs/screenshots/manager.png)
+
+![Worker view on a phone: Alex Chen can accept or decline the invitation](docs/screenshots/worker.png)
+
 ## Run the demo
 
 From the repository root, run:
