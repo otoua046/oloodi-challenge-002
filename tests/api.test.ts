@@ -14,8 +14,8 @@ const shift = '/api/shifts/shift-001';
 const invite = (id: string) => `${shift}/workers/${id}/invite`;
 const reset = '/api/demo/reset';
 
-async function start(databasePath = ':memory:', now?: () => string) {
-  const { server, close } = createApp({ databasePath, now });
+async function start(databasePath = ':memory:', now?: () => string, previewPassword?: string) {
+  const { server, close } = createApp({ databasePath, now, previewPassword });
   try {
     server.listen(0, '127.0.0.1');
     await once(server, 'listening');
@@ -281,4 +281,21 @@ test('a large shift history and subsequent live update arrive on the same connec
     abort.abort();
     await app.close();
   }
+});
+
+test('a preview password closes every route until the browser supplies it', async (t) => {
+  const app = await start(':memory:', undefined, 'tide-preview');
+  t.after(app.close);
+  const basic = (credentials: string) => ({ Authorization: 'Basic ' + Buffer.from(credentials).toString('base64') });
+
+  for (const path of ['/', shift, '/assets/app.js']) {
+    const response = await app.request(path);
+    await failure(response, 401, 'UNAUTHORIZED');
+    assert.match(response.headers.get('www-authenticate') ?? '', /^Basic realm="Tideway preview"/);
+  }
+  await failure(await app.request(invite('worker-002'), 'POST', 'manager', basic('maya:wrong')), 401, 'UNAUTHORIZED');
+  await failure(await app.request(shift, 'GET', undefined, { Authorization: 'Bearer tide-preview' }), 401, 'UNAUTHORIZED');
+
+  await success(await app.request(shift, 'GET', undefined, basic('anyone:tide-preview')));
+  await success(await app.request(invite('worker-002'), 'POST', 'manager', basic(':tide-preview')));
 });

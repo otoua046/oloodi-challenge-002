@@ -21,6 +21,16 @@ npm start
 
 `npm start` builds React and starts the API on the same port. Restart it after editing the source. Run `npm run reset` in a second terminal to restore the seed. The default database is `data/staffing.sqlite`. Override `PORT`, `HOST`, or `DATABASE_PATH` when starting the server. Set `APP_URL` on the reset command if the address changes.
 
+## Public preview
+
+`fly.toml` deploys the Docker image to Fly.io as a preview to look at. Candidates still build and run the app locally. Roles are plain request headers, so anyone who can reach a deployment can act as the Manager and reset the demo. Set a password before the first deploy:
+
+```sh
+fly secrets set PREVIEW_PASSWORD='choose-a-long-random-password'
+```
+
+With `PREVIEW_PASSWORD` set, the server asks every visitor for that password and accepts any user name. API callers pass it too, for example `curl -u preview:PASSWORD "$SHIFT"`. Local runs leave it unset and stay open. Keep one Machine with `fly scale count 1`, because each Machine has its own database. The preview returns to the seeded shift whenever its Machine restarts.
+
 ## The shift
 
 **Evening event crew** (`shift-001`) runs Tuesday, November 24, 2026, from 5 to 10 p.m. Toronto time at Harbor Hall, East Entrance. The fixed date keeps every demo reproducible.
